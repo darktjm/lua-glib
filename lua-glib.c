@@ -13,9 +13,6 @@ This package was originally part of another proect with a weird
 build system, so no build support is provided in this standalone
 version, at least for now.  Just compile with appropriate flags
 to create a shared library linked against the Lua and GLib libraries.
-This documentation was built as follows:
-
-     ldoc.lua -p lua-glib -o lua-glib -d /tmp -f markdown -t 'Lua GLib Library' lua-glib.c
 
 No support is provided for Type Conversion Macros, Byte Order Macros,
 Numerical Definitions, or Miscellaneous Macros, as they are all
@@ -71,7 +68,46 @@ Key-value file parser, and Bookmark file parser.
 Eventually, this may be split into multiple modules, so that uselses stuff
 can be removed.  However, removing useless stuff from GLib is not easy,
 so having Lua bindings for what's there is not necessarily harmful.
+
+This documentation was built as follows:
+
+     ldoc.lua -p lua-glib -o lua-glib -d . -f discount -t 'Lua GLib Library' lua-glib.c
+
+Using [ldoc-1.2.0](http://stevedonovan.github.com/ldoc), with a patch to
+escape underscores in in-line references:
+
+~~~
+--- ldoc/markup.lua
++++ ldoc/markup.lua
+@@ -42,6 +42,9 @@
+    if backtick_references then
+       res  = res:gsub('`([^`]+)`',function(name)
+          local ref,err = markup.process_reference(name)
++         if not plain and ref then -- a nastiness with markdown.lua and underscores
++            name = name:gsub('_','\\_')
++         end
+          if ref then
+             return ('<a href="%s">%s</a> '):format(ldoc.href(ref),name)
+          else
+~~~
+
+And [lua-discount](http://asbradbury.org/projects/lua-discount/), changed
+to use the system discount library:
+
+    rm -f *.h
+    make DISCOUNT_OBJS= LIBS=-lmarkdown
+
+The [discount](http://www.pell.portland.or.us/~orc/Code/discount/) version I
+used was 2.1.5a, with everything enabled, and compiled with -fPIC to enable
+linking with shared libraries.
+
+Note that since LDoc does not support error return sections, I have used
+exception sections (@raise) instead.
+
 @module glib
+@author Thomas J. Moore
+@copyright 2012
+@license Apache-2.0
 */
 /* $Id$ */
 
@@ -166,8 +202,12 @@ Version Information.
 
 /***
 GLib version string.
+Version of running glib (not the one it was compiled against).  The format is
+*major*.*minor*.*micro*.
 @table version
-Version of running glib (not the one it was compiled against)
+@usage
+gver = tonumber(glib.version:match '(.*)%.')
+print(gver > 2.30)
 */
 
 /*********************************************************************/
@@ -178,16 +218,16 @@ Standard Macros.
 
 /***
 Operating system.
-@table os
 A string representing the operating system: 'win32', 'beos', 'unix',
  'unknown'
+@table os
 */
 
 /***
 Directory separator.
-@table dir_separator
 Unlike GLib's directory separator, this includes both valid values under
 Win32.
+@table dir_separator
 */
 
 /***
@@ -221,9 +261,9 @@ static struct lf {
 Log a message, GLib-style.
 This is a wrapper for `g_log()`.
 @function log
-@tparam string domain (optional) The log domain.  This parameter may be absent
+@tparam[opt] string domain The log domain.  This parameter may be absent
  to use `G_LOG_DOMAIN`.
-@tparam string level (optional) The log level.  Acceptable values are:
+@tparam[opt] string level The log level.  Acceptable values are:
 
   - 'crit/'critical'
   - 'debug'
@@ -289,17 +329,25 @@ static int free_convert_state(lua_State *L)
 }
 
 /***
-Stream character conversion function returned by convert.
-This function is returned by convert to support converting
+Stream character conversion function returned by `convert`.
+This function is returned by `convert` to support converting
 streams piecewise.  Simply call with string arguments, accumulating
 the returned strings.  When finished with the stream, call with
 no arguments.  This will return the final string to append and reset
 the stream for reuse.
 @function _convert_
 @see convert
-@tparam string str (optional) The next piece of the string to convert;
+@tparam[opt] string str The next piece of the string to convert;
  absent to finish conversion
 @treturn string The next piece of the converted string
+@usage
+c = glib.convert(nil, 'utf-8', 'latin1')
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(c(buf))
+end
+outf:write(c())
 */
 
 static int stream_convert(lua_State *L)
@@ -353,40 +401,38 @@ static int stream_convert(lua_State *L)
 /***
 Convert strings from one character set to another.
 This is a wrapper for `g_convert()` and friends.  To convert a stream,
-pass in no arguments or nil for str.  The return value is either
-the converted string, or a function matching the _convert_ type
-below.
+pass in no arguments or `nil` for str.  The return value is either
+the converted string, or a function matching the `_convert_` function.
 @function convert
 @see _convert_
-@tparam string str (optional) The string to convert, or nil/absent to produce a
+@tparam[opt] string str The string to convert, or `nil`/absent to produce a
  streaming converter
-@tparam string to (optional) The target character set. This may be nil or
+@tparam[optchain] string to The target character set. This may be `nil` or
  absent to indicate the current locale.  This may be 'filename' to indicate
  the filename character set.
-@tparam string from (optional) The target character set. This may be nil or
+@tparam[optchain] string from The target character set. This may be `nil` or
  absent to indicate the current locale.  This may be 'filename' to
  indicate the filename character set.
-@tparam string fallback (optional) Any characters in *from* which have no
+@tparam[optchain] string fallback Any characters in *from* which have no
  equivalent in *to* are converted to this string.  This is not
  supported in stream mode.
 @treturn string Converted string, if *str* was specified
-@treturn function stream convert function, if *str* was nil or missing
-@treturn nil on errors, followed by error message string
+@treturn function stream convert function, if *str* was `nil` or missing
+@raise Returns `nil` and error message string on error.
 */
 static int glib_convert(lua_State *L)
 {
-    int narg = lua_gettop(L);
     const char *s, *from = NULL, *to = NULL;
     size_t slen = 0;
     GError *err = NULL;
     char *ret;
     gsize retlen;
 
-    if(narg < 2 || lua_isnil(L, 2))
+    if(lua_isnoneornil(L, 2))
 	g_get_charset(&to);
     else
 	to = luaL_checkstring(L, 2);
-    if(narg < 3 || lua_isnil(L, 3))
+    if(lua_isnoneornil(L, 3))
 	g_get_charset(&from);
     else
 	from = luaL_checkstring(L, 3);
@@ -400,7 +446,7 @@ static int glib_convert(lua_State *L)
 	g_get_filename_charsets(&fncs);
 	to = fncs[0];
     }
-    if(narg == 0 || lua_isnil(L, 1)) {
+    if(lua_isnoneornil(L, 1)) {
 	/* there's no way I'm repeating glib's fallback code */
 	/* it does the following: */
 	/*   -> if a straight convert succeeds, return that */
@@ -408,7 +454,7 @@ static int glib_convert(lua_State *L)
 	/*      utf8->to is done 1 char at a time, replacing failures */
 	/* the only way to support this in a stream is to always assume */
 	/* failures will occur, forcing dual char-by-char conversions */
-	if(narg > 3)
+	if(lua_gettop(L) > 3)
 	    luaL_argerror(L, 4, "fallback not supported for streams");
 	else {
 	    alloc_udata(L, st, convert_state);
@@ -418,7 +464,7 @@ static int glib_convert(lua_State *L)
 	}
     }
     s = luaL_checklstring(L, 1, &slen);
-    if(narg < 4 || lua_isnil(L, 4))
+    if(lua_isnoneornil(L, 4))
 	ret = g_convert(s, slen, to, from, NULL, &retlen, &err);
     else
 	ret = g_convert_with_fallback(s, slen, to, from,
@@ -444,7 +490,6 @@ Unicode Manipulation
 
 #define one_unichar() \
     gunichar ch; \
-    luaL_argcheck(L, lua_gettop(L) == 1, 1, "one character expected"); \
     if(lua_isnumber(L, 1)) \
 	ch = lua_tonumber(L, 1); \
     else { \
@@ -469,6 +514,7 @@ This is a wrapper for `g_unichar_validate()`.
 @tparam string|number c The Unicode character, as either an integer or a
  utf-8 string.
 @treturn boolean True if *c* is valid
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(validate)
 /***
@@ -478,6 +524,7 @@ This is a wrapper for `g_unichar_isalpha()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is alphabetic
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isalpha)
 /***
@@ -487,6 +534,7 @@ This is a wrapper for `g_unichar_iscntrl()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a control character
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(iscntrl)
 /***
@@ -496,6 +544,7 @@ This is a wrapper for `g_unichar_isdefined()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is defined
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isdefined)
 /***
@@ -507,6 +556,7 @@ This is a wrapper for `g_unichar_isdigit()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a digit-like character
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isdigit)
 /***
@@ -516,6 +566,7 @@ This is a wrapper for `g_unichar_isgraph()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a graphic character
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isgraph)
 /***
@@ -525,6 +576,7 @@ This is a wrapper for `g_unichar_islower()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is lower-case.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(islower)
 /***
@@ -535,6 +587,7 @@ This is a wrapper for `g_unichar_ismark()`.
  or a utf-8 string.
 @treturn boolean True if *c* is a non-spacing mark, combining mark, or
  enclosing mark
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(ismark)
 /***
@@ -544,6 +597,7 @@ This is a wrapper for `g_unichar_isprint()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is printable, even if blank
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isprint)
 /***
@@ -553,6 +607,7 @@ This is a wrapper for `g_unichar_ispunct()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a punctuation or symbol character
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(ispunct)
 /***
@@ -562,6 +617,7 @@ This is a wrapper for `g_unichar_isspace()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is whitespace
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isspace)
 /***
@@ -571,6 +627,7 @@ This is a wrapper for `g_unichar_istitle()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is titlecase alphabetic
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(istitle)
 /***
@@ -580,6 +637,7 @@ This is a wrapper for `g_unichar_isupper()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is upper-case alphabetic
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isupper)
 /***
@@ -591,6 +649,7 @@ This is a wrapper for `g_unichar_isxdigit()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a hexadecimal digit
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(isxdigit)
 /***
@@ -600,6 +659,7 @@ This is a wrapper for `g_unichar_iswide()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is double-width
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(iswide)
 /***
@@ -610,6 +670,7 @@ This is a wrapper for `g_unichar_iswide_cjk()`.
  or a utf-8 string.
 @treturn boolean True if *c* is double-width normally or in legacy
  East-Asian locales
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(iswide_cjk)
 /***
@@ -619,6 +680,7 @@ This is a wrapper for `g_unichar_iszerowidth()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn boolean True if *c* is a zero-width combining character
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_bool(iszerowidth)
 
@@ -644,6 +706,7 @@ This is a wrapper for `g_unichar_toupper()`.
  or a utf-8 string.
 @treturn string|number The result of conversion, as either an integer or a
  utf-8 string, depending on what *c* was.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_int_ch(toupper)
 /***
@@ -654,6 +717,7 @@ This is a wrapper for `g_unichar_tolower()`.
  or a utf-8 string.
 @treturn string|number The result of conversion, as either an integer or a
  utf-8 string, depending on what *c* was.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_int_ch(tolower)
 /***
@@ -664,6 +728,7 @@ This is a wrapper for `g_unichar_totitle()`.
  or a utf-8 string.
 @treturn string|number The result of conversion, as either an integer or a
  utf-8 string, depending on what *c* was.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 uni_int_ch(totitle)
 
@@ -682,7 +747,9 @@ This is a wrapper for `g_unichar_digit_value()`.
 @see isdigit
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
-@treturn number The digit's numeric value, or -1 if *c* is not a digit.
+@treturn number The digit's numeric value
+@raise Generates argument error if *c* is a string but not valid UTF-8.
+Returns -1 if *c* is not a digit.
 */
 uni_int(digit_value)
 /***
@@ -692,7 +759,9 @@ This is a wrapper for `g_unichar_xdigit_value()`.
 @see isxdigit
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
-@treturn number The hex digit's numeric value, or -1 if *c* is not a hex digit.
+@treturn number The hex digit's numeric value
+@raise Generates argument error if *c* is a string but not valid UTF-8.
+Returns -1 if *c* is not a hex digit.
 */
 uni_int(xdigit_value)
 
@@ -703,14 +772,15 @@ This is a wrapper for `g_unichar_type()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn string The character's class; one of:
-    'control', 'format', 'unassigned', 'private_use', 'surrogate',
-    'lowercase_letter', 'modifier_letter', 'other_letter', 'titlecase_letter',
-    'uppercase_letter', 'spacing_mark', 'enclosing_mark', 'non_spacing_mark',
-    'decimal_number', 'letter_number', 'other_number', 'connect_punctuation',
-    'dash_punctuation', 'close_punctuation', 'final_punctuation',
-    'initial_punctuation', 'other_punctuation', 'open_punctuation',
-    'currency_symbol', 'modifier_symbol', 'math_symbol', 'other_symbol',
-    'line_separator', 'paragraph_separator', 'space_separator'
+    `control`, `format`, `unassigned`, `private_use`, `surrogate`,
+    `lowercase_letter`, `modifier_letter`, `other_letter`, `titlecase_letter`,
+    `uppercase_letter`, `spacing_mark`, `enclosing_mark`, `non_spacing_mark`,
+    `decimal_number`, `letter_number`, `other_number`, `connect_punctuation`,
+    `dash_punctuation`, `close_punctuation`, `final_punctuation`,
+    `initial_punctuation`, `other_punctuation`, `open_punctuation`,
+    `currency_symbol`, `modifier_symbol`, `math_symbol`, `other_symbol`,
+    `line_separator`, `paragraph_separator`, `space_separator`.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 static int glib_type(lua_State *L)
 {
@@ -760,15 +830,16 @@ This is a wrapper for `g_unichar_break_type()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn string The line break classification; one of:
-    'mandatory', 'carriage_return', 'line_feed', 'combining_mark', 'surrogate',
-    'zero_width_space', 'inseperable', 'non_breaking_glue', 'contingent',
-    'space', 'after', 'before', 'before_and_after', 'hyphen', 'non_starter',
-    'open_punctuation', 'close_punctuation', 'quotation', 'exclamation',
-    'ideographic', 'numeric', 'infix_separator', 'symbol', 'alphabetic',
-    'prefix', 'postfix', 'complex_context', 'ambiguous', 'unknown', 'next_line',
-    'word_joiner', 'hangul_l_jamo', 'hangul_v_jamo', 'hangul_t_jamo',
-    'hangul_lv_syllable', 'hangul_lvt_syllable', 'close_parenthesis',
-    'conditional_japanese_starter', 'hebrew_letter'
+    `mandatory`, `carriage_return`, `line_feed`, `combining_mark`, `surrogate`,
+    `zero_width_space`, `inseperable`, `non_breaking_glue`, `contingent`,
+    `space`, `after`, `before`, `before_and_after`, `hyphen`, `non_starter`,
+    `open_punctuation`, `close_punctuation`, `quotation`, `exclamation`,
+    `ideographic`, `numeric`, `infix_separator`, `symbol`, `alphabetic`,
+    `prefix`, `postfix`, `complex_context`, `ambiguous`, `unknown`, `next_line`,
+    `word_joiner`, `hangul_l_jamo`, `hangul_v_jamo`, `hangul_t_jamo`,
+    `hangul_lv_syllable`, `hangul_lvt_syllable`, `close_parenthesis`,
+    `conditional_japanese_starter`, `hebrew_letter`.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 static int glib_break_type(lua_State *L)
 {
@@ -826,9 +897,10 @@ This is a wrapper for `g_unichar_get_mirror_char()`.
 @function get_mirror_char
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
-@treturn nil|string|number if the character has no mirror; otherwise, the
+@treturn nil|string|number `nil` if the character has no mirror; otherwise, the
  mirror character.  The returned character is either an integer or a utf-8
  string, depending on the input.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 static int glib_get_mirror_char(lua_State *L)
 {
@@ -855,6 +927,7 @@ This is a wrapper for `g_unichar_get_script()`.
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn string The four-letter ISO 15924 script code for *c*.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 static int glib_get_script(lua_State *L)
 {
@@ -869,15 +942,15 @@ static int glib_get_script(lua_State *L)
 
 /***
 Obtain a substring of a utf-8-encoded string.
-This is not a wrapper for `g_utf8_substring, but instead code which
-emulates string.sub using g_utf8_offset_to_pointer()` and
-g_utf8_strlen().  Positive positions start at the beginining of the
+This is not a wrapper for `g_utf8_substring()`, but instead code which
+emulates `string.sub` using `g_utf8_offset_to_pointer()` and
+`g_utf8_strlen()`.  Positive positions start at the beginining of the
 string, and negative positions start at the end.  Position numbers
 refer to code points rather than byte offsets.
 @function utf8_sub
 @tparam string s The utf-8-encoded source string
-@tparam number first (optional) The first Unicode code point (default is 1)
-@tparam number last (optional) The last Unicode code point (default is -1)
+@tparam[opt] number first The first Unicode code point (default is 1)
+@tparam[optchain] number last The last Unicode code point (default is -1)
 @treturn string The requested substring.  Out-of-bound ranges result in an
  empty string.
 */
@@ -939,7 +1012,7 @@ static int glib_utf8_len(lua_State *L)
 
 /***
 Check if a string is valid UTF-8.
-This is a wrapper for `g_utf8_validate()`
+This is a wrapper for `g_utf8_validate()`.
 @function utf8_validate
 @tparam string s The string
 @treturn boolean True if *s* is valid UTF-8.
@@ -970,7 +1043,7 @@ static int glib_##n(lua_State *L) \
 
 /***
 Convert UTF-8 string to upper-case.
-This is a wrapper for `g_utf8_strup()`
+This is a wrapper for `g_utf8_strup()`.
 @function utf8_strup
 @tparam string s The source string
 @treturn string *s*, with all lower-case characters converted to upper-case
@@ -978,7 +1051,7 @@ This is a wrapper for `g_utf8_strup()`
 uni_str(utf8_strup)
 /***
 Convert UTF-8 string to lower-case.
-This is a wrapper for `g_utf8_strdown()`
+This is a wrapper for `g_utf8_strdown()`.
 @function utf8_strdown
 @tparam string s The source string
 @treturn string *s*, with all upper-case characters converted to lower-case
@@ -986,7 +1059,7 @@ This is a wrapper for `g_utf8_strdown()`
 uni_str(utf8_strdown)
 /***
 Convert UTF-8 string to case-independent form.
-This is a wrapper for `g_utf8_casefold()`
+This is a wrapper for `g_utf8_casefold()`.
 @function utf8_casefold
 @tparam string s The source string
 @treturn string *s*, in a form that is suitable for case-insensitive direct
@@ -1001,9 +1074,9 @@ normalizations are NFD (the default), NFC (compose), NFKD (compatible),
 and NFKC (compose, compatible).
 @function utf8_normalize
 @tparam string s The string to normalize
-@tparam boolean compose If true, perform canonical composition.  Otherwise,
- leave in decomposed form.
-@tparam boolean compatible If true, decompose using compatibility
+@tparam[opt] boolean compose If true, perform canonical composition.
+ Otherwise, leave in decomposed form.
+@tparam[optchain] boolean compatible If true, decompose using compatibility
  decompostions.  Otherwise, only decompose using canonical decompositions.
 @treturn string The normalized UTF-8 string.
 */
@@ -1012,9 +1085,8 @@ static int glib_utf8_normalize(lua_State *L)
     size_t sz;
     const char *s = luaL_checklstring(L, 1, &sz);
     char *ret;
-    int narg = lua_gettop(L);
-    int docomp = narg > 1 ? lua_toboolean(L, 2) : 0;
-    int docompat = narg > 2 ? lua_toboolean(L, 3) : 0;
+    int docomp = lua_toboolean(L, 2);
+    int docompat = lua_toboolean(L, 3);
     GNormalizeMode nm;
     if(docomp)
 	nm = docompat ? G_NORMALIZE_NFKC : G_NORMALIZE_NFC;
@@ -1064,7 +1136,7 @@ This is a wrapper for `g_utf8_collate_key()`.
 uni_str(utf8_collate_key)
 /***
 Create a comparison key for a UTF-8 filename string.
-This is a wrapper for `g_collate_key_for_filename()`
+This is a wrapper for `g_collate_key_for_filename()`.
 @function utf8_collate_key_for_filename
 @see utf8_collate
 @see utf8_collate_key
@@ -1097,67 +1169,68 @@ static int glib_##n(lua_State *L) \
 
 /***
 Convert a UTF-8 string to UTF-16.
-This is a wrapper for `g_utf8_to_utf16()`
+This is a wrapper for `g_utf8_to_utf16()`.
 @function utf8_to_utf16
 @tparam string s The source string
-@treturn string *s*, converted to UTF-16, or nil followed by an error message
- if *s* is not valid UTF-8.
+@treturn string *s*, converted to UTF-16
+@raise Returns `nil` followed by an error message if *s* is not valid UTF-8.
 */
 uni_conv(utf8_to_utf16, gchar, gunichar2)
 /***
 Convert a UTF-8 string to UCS-4.
-This is a wrapper for `g_utf8_to_ucs4()`
+This is a wrapper for `g_utf8_to_ucs4()`.
 @function utf8_to_ucs4
 @tparam string s The source string
-@treturn string *s*, converted to UCS-4, or nil followed by an error message
- if *s* is not valid UTF-8.
+@treturn string *s*, converted to UCS-4
+@raise Returns `nil` followed by an error message if *s* is not valid UTF-8.
 */
 uni_conv(utf8_to_ucs4, gchar, gunichar)
 /***
 Convert a UTF-16 string to UTF-8.
-This is a wrapper for `g_utf16_to_utf8()`
+This is a wrapper for `g_utf16_to_utf8()`.
 @function utf16_to_utf8
 @tparam string s The source string
-@treturn string *s*, converted to UTF-8, or nil followed by an error message
- if *s* is not valid UTF-16.
+@treturn string *s*, converted to UTF-8
+@raise Returns `nil` followed by an error message if *s* is not valid UTF-16.
 */
 uni_conv(utf16_to_ucs4, gunichar2, gunichar)
 /***
 Convert a UTF-16 string to UCS-4.
-This is a wrapper for `g_utf16_to_ucs4()`
+This is a wrapper for `g_utf16_to_ucs4()`.
 @function utf16_to_ucs4
 @tparam string s The source string
-@treturn string *s*, converted to UCS-4, or nil followed by an error message
- if *s* is not valid UTF-16.
+@treturn string *s*, converted to UCS-4
+@raise Returns `nil` followed by an error message if *s* is not valid UTF-16.
 */
 uni_conv(utf16_to_utf8, gunichar2, gchar)
 /***
 Convert a UCS-4 string to UTF-16.
-This is a wrapper for `g_utf8_to_utf16()`
+This is a wrapper for `g_utf8_to_utf16()`.
 @function ucs4_to_utf16
 @tparam string s The source string
-@treturn string *s*, converted to UTF-16, or nil followed by an error message
- if *s* is not valid UCS-4.
+@treturn string *s*, converted to UTF-16
+@raise Returns `nil` followed by an error message if *s* is not valid UCS-4.
 */
 uni_conv(ucs4_to_utf16, gunichar, gunichar2)
 /***
 Convert a UCS-4 string to UTF-8.
-This is a wrapper for `g_utf16_to_utf8()`
+This is a wrapper for `g_utf16_to_utf8()`.
 @function ucs4_to_utf8
 @tparam string s The source string
-@treturn string *s*, converted to UTF-8, or nil followed by an error message
- if *s* is not valid UCS-4.
+@treturn string *s*, converted to UTF-8
+@raise Returns `nil` followed by an error message if *s* is not valid UCS-4.
 */
 uni_conv(ucs4_to_utf8, gunichar, gchar)
 
 /***
 Convert a UCS-4 code point to UTF-8.
-This is a wrapper for `g_unichar_to_utf8()`
+This is a wrapper for `g_unichar_to_utf8()`.
 @function to_utf8
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
 @treturn string A UTF-8 string representing *c*.  Note that this basically
- has no effect if *c* is a string already.
+ has no effect if *c* is a single-character string already.
+@raise Generates argument error if *c* is a string but not valid UTF-8.
 */
 static int glib_to_utf8(lua_State *L)
 {
@@ -1186,17 +1259,25 @@ typedef struct base64_state {
 } base64_state;
 
 /***
-Stream Base64-encoding function returned by base64\_encode.
-This function is returned by base64\_encode to support
+Stream Base64-encoding function returned by `base64_encode`.
+This function is returned by `base64_encode` to support
 piecewise-encoding streams.  Simply call with string arguments,
 accumulating the returned strings.  When finished with the stream,
 call with no arguments.  This will return the final string to
 append and reset the stream for reuse.
 @function _base64_encode_
 @see base64_encode
-@tparam string s (optional) The next piece of the string to convert; absent
+@tparam[opt] string s The next piece of the string to convert; absent
  to finish conversion
 @treturn string The next piece of the converted string
+@usage
+enc = glib.base64_encode()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(enc(buf))
+end
+outf:write(enc())
 */
 static int stream_base64_encode(lua_State *L)
 {
@@ -1204,7 +1285,7 @@ static int stream_base64_encode(lua_State *L)
     const char *s;
 
     get_udata(L, lua_upvalueindex(1), st, base64_state);
-    if(lua_gettop(L) == 0 || lua_isnil(L, 1)) {
+    if(lua_isnoneornil(L, 1)) {
 	sz = g_base64_encode_close(0, st->obuf, &st->state, &st->save);
 	lua_pushlstring(L, st->obuf, sz);
 	memset(st, 0, sizeof(*st));
@@ -1231,8 +1312,8 @@ Base64-encode a string.
 This is a wrapper for `g_base64_encode()` and friends.
 @function base64_encode
 @see _base64_encode_
-@tparam string s (optinal) The data to encode.  If absent, return a function
- like \_base64\_encode\_ for encoding a stream.
+@tparam[opt] string s The data to encode.  If absent, return a function
+ like `_base64_encode_` for encoding a stream.
 @treturn string|function The base64-encoded stream (without newlines), or a
  function to do the same on a stream.
 */
@@ -1254,17 +1335,25 @@ static int glib_base64_encode(lua_State *L)
 }
 
 /***
-Stream Base64-decoding function returned by base64\_decode.
-This function is returned by base64\_decode to support
+Stream Base64-decoding function returned by `base64_decode`.
+This function is returned by `base64_decode` to support
 piecewise-decoding streams.  Simply call with string arguments,
 accumulating the returned strings.  When finished with the stream,
 call with no arguments.  This will return the final string to
 append and reset the stream for reuse.
 @function _base64_decode_
 @see base64_decode
-@tparam string s (optional) The next piece of the string to convert; absent
+@tparam[opt] string s The next piece of the string to convert; absent
  to finish conversion
 @treturn string The next piece of the converted output
+@usage
+dec = glib.base64_decode()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(dec(buf))
+end
+outf:write(dec())
 */
 static int stream_base64_decode(lua_State *L)
 {
@@ -1272,7 +1361,7 @@ static int stream_base64_decode(lua_State *L)
     const char *s;
 
     get_udata(L, lua_upvalueindex(1), st, base64_state);
-    if(lua_gettop(L) == 0 || lua_isnil(L, 1)) {
+    if(lua_isnoneornil(L, 1)) {
 	memset(st, 0, sizeof(*st));
 	lua_pushliteral(L, "");
 	return 1;
@@ -1298,7 +1387,7 @@ Base64-decode a string.
 This is a wrapper for `g_base64_deocde()` and friends.
 @function base64_decode
 @see _base64_decode_
-@tparam string s (optional) The data to decode.  If absent, return a function
+@tparam[opt] string s The data to decode.  If absent, return a function
  like _base64_decode_ for decoding a stream.
 @treturn string|function The decoded form of the base64-encoded stream, or a
  function to do the same on a stream.
@@ -1355,58 +1444,33 @@ static int finalize_sum(lua_State *L, GChecksum *sum, gboolean raw)
 }
 
 /***
-Stream MD5 calculation function returned by md5sum.
-This function is returned by md5sum to support computing
-stream checksums piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final checksum.  Doing so invalidates
+Stream checksum/hash calculation function type.
+This function is returned by `md5sum`, `sha1sum`, or `sha256sum` to support
+computing stream checksums piecewise.  Simply call with string arguments,
+until the stream is complete.  Then, call with an absent or `nil`
+argument to return the final checksum.  Doing so invalidates
 the state, so that the function returns an error from that point
 forward.
-@function _md5sum_
+@function _sum_
 @see md5sum
-@tparam string s (optional) The next piece of the string to checksum; absent
- or nil to finish checksum
-@tparam boolean raw (optional) True if checksum should be returned in binary
- form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed checksum.  If the state is invalid, always return nil.
-*/
-/***
-Stream SHA1 calculation function returned by sha1sum.
-This function is returned by sha1sum to support computing
-stream checksums piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final checksum.  Doing so invalidates
-the state, so that the function returns an error from that point
-forward.
-@function _sha1sum_
 @see sha1sum
-@tparam string s (optional) The next piece of the string to checksum; absent
- or nil to finish checksum
-@tparam boolean raw (optional) True if checksum should be returned in binary
- form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed checksum.  If the state is invalid, always return nil.
-*/
-/***
-Stream SHA256 calculation function returned by sha256sum.
-This function is returned by sha256sum to support computing
-stream checksums piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final checksum.  Doing so invalidates
-the state, so that the function returns an error from that point
-forward.
-@function _sha256sum_
 @see sha256sum
-@tparam string s (optional) The next piece of the string to checksum; absent
- or nil to finish checksum
-@tparam boolean raw (optional) True if checksum should be returned in binary
+@tparam[opt] string s The next piece of the string to checksum; absent
+ or `nil` to finish checksum
+@tparam[opt] boolean raw True if checksum should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed checksum.  If the state is invalid, always return nil.
+ if *s* is not `nil`)
+@treturn |nil|string Nothing unless *s* is absent or `nil`.  Otherwise, return
+ the computed checksum.
+@raise If the state is invalid, always return `nil`.
+@usage
+sumf = glib.md5sum()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  sumf(buf)
+end
+sum = sumf()
 */
 static int stream_sum(lua_State *L)
 {
@@ -1449,12 +1513,12 @@ static int glib_sum(lua_State *L, GChecksumType ct)
 Compute MD5 checksum of a string.
 This is a wrapper for `g_checksum_new()` and friends.
 @function md5sum
-@see _md5sum_
-@tparam string s (optional) The data to checksum.  If absent, return a
- function like \_md5sum\_ to checksum a stream piecewise.
-@tparam boolean raw (optional) True if checksum should be returned in binary
+@see _sum_
+@tparam[opt] string s The data to checksum.  If absent, return a
+ function like `_sum_` to checksum a stream piecewise.
+@tparam[optchain] boolean raw True if checksum should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The MD5 checksum or a stream converter function.
 */
 static int glib_md5sum(lua_State *L)
@@ -1466,12 +1530,12 @@ static int glib_md5sum(lua_State *L)
 Compute SHA1 checksum of a string.
 This is a wrapper for `g_checksum_new()` and friends.
 @function sha1sum
-@see _sha1sum_
-@tparam string s (optional) The data to checksum.  If absent, return a
- function like \_sha1sum\_ to checksum a stream piecewise.
-@tparam boolean raw (optional) True if checksum should be returned in binary
+@see _sum_
+@tparam[opt] string s The data to checksum.  If absent, return a
+ function like `_sum_` to checksum a stream piecewise.
+@tparam[optchain] boolean raw True if checksum should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The SHA1 checksum or a stream converter function.
 */
 static int glib_sha1sum(lua_State *L)
@@ -1483,12 +1547,12 @@ static int glib_sha1sum(lua_State *L)
 Compute SHA256 checksum of a string.
 This is a wrapper for `g_checksum_new()` and friends.
 @function sha256sum
-@see _sha256sum_
-@tparam string s (optional) The data to checksum.  If absent, return a
- function like \_sha256sum\_ to checksum a stream piecewise.
-@tparam boolean raw (optional) True if checksum should be returned in binary
+@see _sum_
+@tparam[opt] string s The data to checksum.  If absent, return a
+ function like `_sum_` to checksum a stream piecewise.
+@tparam[optchain] boolean raw True if checksum should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The SHA256 checksum or a stream converter function.
 */
 static int glib_sha256sum(lua_State *L)
@@ -1531,58 +1595,32 @@ static int finalize_hmac(lua_State *L, GHmac *sum, gboolean raw)
 }
 
 /***
-Stream MD5 HMAC calculation function returned by md5hmac.
-This function is returned by md5hmac to support computing
-stream digests piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final digest.  Doing so invalidates
-the state, so that the function returns an error from that point
-forward.
-@function _md5hmac_
+Stream HMAC calculation function.
+This function is returned by `md5hmac`, `sha1hmac`, or `sha256hmac` to
+support computing stream digests piecewise.  Simply call with string
+arguments, until the stream is complete.  Then, call with an absent or `nil`
+argument to return the final digest.  Doing so invalidates the state,
+so that the function returns an error from that point forward.
+@function _hmac_
 @see md5hmac
-@tparam string s (optional) The next piece of the string to digest; absent
- or nil to finish digest
-@tparam boolean raw (optional) True if digest should be returned in binary
- form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed digest.  If the state is invalid, always return nil.
-*/
-/***
-Stream SHA1 HMAC calculation function returned by sha1hmac.
-This function is returned by sha1hmac to support computing
-stream digests piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final digest.  Doing so invalidates
-the state, so that the function returns an error from that point
-forward.
-@function _sha1hmac_
 @see sha1hmac
-@tparam string s (optional) The next piece of the string to digest; absent
- or nil to finish digest
-@tparam boolean raw (optional) True if digest should be returned in binary
- form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed digest.  If the state is invalid, always return nil.
-*/
-/***
-Stream SHA256 HMAC calculation function returned by sha256hmac.
-This function is returned by sha256hmac to support computing
-stream digests piecewise.  Simply call with string arguments,
-until the stream is complete.  Then, call with an absent or nil
-string argument to return the final digest.  Doing so invalidates
-the state, so that the function returns an error from that point
-forward.
-@function _sha256hmac_
 @see sha256hmac
-@tparam string s (optional) The next piece of the string to digest; absent
- or nil to finish digest
-@tparam boolean raw (optional) True if digest should be returned in binary
+@tparam[opt] string s The next piece of the string to digest; absent
+ or `nil` to finish digest
+@tparam[opt] boolean raw True if digest should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is not nil)
-@treturn |nil|string Nothing unless *s* is absent or nil.  Otherwise, return
- the computed digest.  If the state is invalid, always return nil.
+ if *s* is not `nil`)
+@treturn |nil|string Nothing unless *s* is absent or `nil`.  Otherwise, return
+ the computed digest.
+@raise If the state is invalid, always return `nil`.
+@usage
+hmacf = glib.md5hmac(key)
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  hmacf(buf)
+end
+hmac = hmacf()
 */
 static int stream_hmac(lua_State *L)
 {
@@ -1626,13 +1664,13 @@ static int glib_hmac(lua_State *L, GChecksumType ct)
 Compute secure HMAC digest using MD5.
 This is a wrapper for `g_hmac_new()` and friends.
 @function md5hmac
-@see _md5hmac_
+@see _hmac_
 @tparam string key HMAC key
-@tparam string s (optional) The data to digest.  If absent, return a
- function like \_md5hmac\_ to digest a stream piecewise.
-@tparam boolean raw (optional) True if digest should be returned in binary
+@tparam[opt] string s The data to digest.  If absent, return a
+ function like `_hmac_` to digest a stream piecewise.
+@tparam[optchain] boolean raw True if digest should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The MD5 HMAC digest or a stream converter function.
 */
 static int glib_md5hmac(lua_State *L)
@@ -1644,13 +1682,13 @@ static int glib_md5hmac(lua_State *L)
 Compute secure HMAC digest using SHA1.
 This is a wrapper for `g_hmac_new()` and friends.
 @function sha1hmac
-@see _sha1hmac_
+@see _hmac_
 @tparam string key HMAC key
-@tparam string s (optional) The data to digest.  If absent, return a
- function like \_sha1hmac\_ to digest a stream piecewise.
-@tparam boolean raw (optional) True if digest should be returned in binary
+@tparam[opt] string s The data to digest.  If absent, return a
+ function like `_hmac_` to digest a stream piecewise.
+@tparam[optchain] boolean raw True if digest should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The SHA1 HMAC digest or a stream converter function.
 */
 static int glib_sha1hmac(lua_State *L)
@@ -1662,13 +1700,13 @@ static int glib_sha1hmac(lua_State *L)
 Compute secure HMAC digest using SHA256.
 This is a wrapper for `g_hmac_new()` and friends.
 @function sha256hmac
-@see _sha256hmac_
+@see _hmac_
 @tparam string key HMAC key
-@tparam string s (optional) The data to digest.  If absent, return a
- function like \_sha256hmac\_ to digest a stream piecewise.
-@tparam boolean raw (optional) True if digest should be returned in binary
+@tparam[opt] string s The data to digest.  If absent, return a
+ function like `_hmac_` to digest a stream piecewise.
+@tparam[optchain] boolean raw True if digest should be returned in binary
  form.  Otherwise, return the lower-case hexadecimal-encoded form (ignored
- if *s* is nil)
+ if *s* is `nil`)
 @treturn string|function The SHA256 HMAC digest or a stream converter function.
 */
 static int glib_sha256hmac(lua_State *L)
@@ -1685,7 +1723,7 @@ Internationalization
 /***
 Replace text with its translation.
 This is a wrapper for `_()`.  It resides in the global symbol table
- rather than in glib.
+ rather than in `glib`.
 @function _
 @tparam string s The text to translate
 @treturn string The translated text, or *s* if there is no translation
@@ -1700,7 +1738,7 @@ static int glib_gettext(lua_State *L)
 /***
 Replace text and context with its translation.
 This is a wrapper for `Q_()`.  It resides in the global symbol table
- rather than in glib.
+ rather than in `glib`.
 @function Q_
 @tparam string s the optional context, followed by a vertical bar, followed
  by the text to translate
@@ -1717,7 +1755,7 @@ static int glib_dpgettext0(lua_State *L)
 /***
 Replace text and context with its translation.
 This is a wrapper for `C_()`.  It resides in the global symbol table
- rather than in glib.
+ rather than in `glib`.
 @function C_
 @tparam string c The context
 @tparam string s The text to translate
@@ -1740,7 +1778,7 @@ static int glib_dpgettext4(lua_State *L)
 /***
 Mark text for translation.
 This is a wrapper for `N_()`.  It resides in the global symbol table
- rather than in glib.
+ rather than in `glib`.
 @function N_
 @tparam string s The text to translate
 @treturn string *s*
@@ -1754,7 +1792,7 @@ static int glib_ngettext(lua_State *L)
 /***
 Mark text for translation with context.
 This is a wrapper for `NC_()`.  It resides in the global symbol table
- rather than in 
+ rather than in `glib`.
 @function NC_
 @tparam string c The context
 @tparam string s The text to translate.
@@ -1770,9 +1808,9 @@ static int glib_ndpgettext4(lua_State *L)
 /***
 Obtain list of valid locale names.
 This is a wrapper for `g_get_locale_variants()` and
-`g_get_language_names()`
+`g_get_language_names()`.
 @function get_locale_variants
-@tparam string locale (optional) If present, find valid locale names derived
+@tparam[opt] string locale If present, find valid locale names derived
  from this.  Otherwise, find valid names for the default locale (including C).
 @treturn {string,...} A table array containing valid names for the locale, in
  order of preference.
@@ -1807,7 +1845,7 @@ Date and Time Functions
 /* sort of from cmorris' lua-glib */
 /***
 Suspend execution for some seconds.
-This is a wrapper for `g_usleep()`
+This is a wrapper for `g_usleep()`.
 @function sleep
 @tparam number t Number of seconds to sleep (microsecond accuracy)
 */
@@ -1819,7 +1857,7 @@ static int glib_sleep(lua_State *L)
 
 /***
 Suspend execution for some microseconds.
-This is a wrapper for `g_usleep()`
+This is a wrapper for `g_usleep()`.
 @function usleep
 @tparam number t Number of microseconds to sleep
 */
@@ -1831,26 +1869,66 @@ static int glib_usleep(lua_State *L)
 
 /*********************************************************************/
 /***
-Random Numbers
+Random Numbers.
+Note that no high-level wrapper functions are provided similar to those
+in cmorris' glib wrapper.  Instead, pure Lua functions should be used:
+
+    function shuffle(a)
+        local i
+        for i = 1, #a do
+            local r = glib.random(#a)
+            local t = a[i]
+            a[i] = a[r]
+            a[r] = t
+        end
+    end
+
+    function choice(a)
+        if #a == 0 then
+            return nil
+        end
+        return a[glib.random(#a)];
+    end
+
+    function sample(a, n)
+        local b = {}
+        local s = {}
+        local i
+        for i = 1, n do
+            -- warning, this could take a while if n is near #a
+            repeat
+                r = glib.random(#a)
+                -- to force this to run in predictable time, do this:
+                -- while not b[r] do r = r % #a + 1 end
+            until not b[r]
+            b[r] = true
+            s[i] = a[r]
+        end
+        return s
+    end
 @section Random Numbers
 */
 
 /***
 Obtain a psuedorandom number.
 This is a wrapper for `g_random()` and friends.  This is a clone of
-the standard Lua math.rand(), but using a different random number
+the standard Lua `math.random`, but using a different random number
 algorithm.  Note that there is no way to set the seed; use
-rand\_new() if you need to do that.  In fact, you can
-simply replace random with the results of rand\_new() if you
+`rand_new` if you need to do that.  In fact, you can
+simply replace `random` with the results of `rand_new` if you
 want to simulate setting a seed for this function.
 @function random
 @see rand_new
-@tparam number low (optional) If *high* is present, this is the low end of
+@see math.random
+@tparam[opt] number low If *high* is present, this is the low end of
  the range of random integers to return
-@tparam number high (optional) If present, return a range of random integers,
+@tparam[optchain] number high If present, return a range of random integers,
  from *low* to *high* inclusive.  If not present, return a floating point
  number in the range from zero to one exclusive of one. If *low* is not
  present, and *high* is, *low* is 1.
+@usage
+-- set a seed for glib.random
+glib.random = glib.rand_new(seed)
 */
 static int glib_random(lua_State *L)
 {
@@ -1901,10 +1979,10 @@ Obtain a psuedorandom number generator, given a seed.
 This is a wrapper for `g_rand_new()` and friends.
 @function rand_new
 @see random
-@tparam number|{number,...} seed (optional) seed (if not specified, one will
+@tparam[opt] number|{number,...} seed seed (if not specified, one will
  be selected by the library).  This may be either a number or a table
  array of numbers.
-@treturn function A function with the same behavior as random.
+@treturn function A function with the same behavior as `random`.
 */
 static int glib_rand_new(lua_State *L)
 {
@@ -1946,10 +2024,10 @@ Miscellaneous Utility Functions
 
 /***
 Set or get localized application name.
-This is a wrapper for `g_get_application_name()` and friends
+This is a wrapper for `g_get_application_name()` and friends.
 @function application_name
 @see prgname
-@tparam string name (optional) If present, set the application name
+@tparam[opt] string name If present, set the application name
 @treturn string The name of the application, as set by a previous
  invocation of this function.
 */
@@ -1963,10 +2041,10 @@ static int glib_application_name(lua_State *L)
 
 /***
 Set or get program name.
-This is a wrapper for `g_get_prgname()` and friends
+This is a wrapper for `g_get_prgname()` and friends.
 @function prgname
 @see application_name
-@tparam string name (optional) If present, set the program name
+@tparam[opt] string name If present, set the program name
 @treturn string The name of the program, as set by a previous
  invocation of this function.
 */
@@ -1981,7 +2059,7 @@ static int glib_prgname(lua_State *L)
 /***
 Get environment variable value.
 This is a wrapper for `g_getenv()`.  It is safer to use this than
-os.getenv() if you are going to modify the environment.
+`os.getenv` if you are going to modify the environment.
 @function getenv
 @see setenv
 @see unsetenv
@@ -2001,13 +2079,13 @@ static int glib_getenv(lua_State *L)
 /***
 Set environment variable value.
 This is a wrapper for `g_setenv()`.  If you use this, you should use
-getenv instead of os.getenv as well.
+`glib.getenv` instead of `os.getenv` as well.
 @function setenv
 @see getenv
 @see unsetenv
 @tparam string name Name of variable to set
 @tparam string value New value of variable
-@tparam boolean replace (optional) True to replace if exists; otherwise
+@tparam[opt] boolean replace True to replace if exists; otherwise
  leave old value
 @treturn boolean True if set succeeded; false otherwise
 */
@@ -2021,7 +2099,7 @@ static int glib_setenv(lua_State *L)
 /***
 Remove environment variable.
 This is a wrapper for `g_unsetenv()`.  If you use this, you should use
-getenv instead of os.getenv as well.
+`glib.getenv` instead of `os.getenv` as well.
 @function unsetenv
 @see getenv
 @see setenv
@@ -2057,7 +2135,7 @@ static int glib_listenv(lua_State *L)
 
 /***
 Obtain system user name for current user.
-This is a wrapper for `g_get_user_name()`
+This is a wrapper for `g_get_user_name()`.
 @function get_user_name
 @treturn string The name of the user
 */
@@ -2069,7 +2147,7 @@ static int glib_get_user_name(lua_State *L)
 
 /***
 Obtain full user name for current user.
-This is a wrapper for `g_get_real_name()`
+This is a wrapper for `g_get_real_name()`.
 @function get_real_name
 @treturn string The full name of the user, or Unknown if this
  cannot be obtained.
@@ -2092,8 +2170,8 @@ static struct dn {
     { "desktop", NULL, G_USER_DIRECTORY_DESKTOP },
     { "documents", NULL, G_USER_DIRECTORY_DOCUMENTS },
     { "download", NULL, G_USER_DIRECTORY_DOWNLOAD },
-    { "help", NULL, -1 },
     { "home", g_get_home_dir },
+    { "list", NULL, -1 },
     { "music", NULL, G_USER_DIRECTORY_MUSIC },
     { "pictures", NULL, G_USER_DIRECTORY_PICTURES },
     { "runtime", g_get_user_runtime_dir },
@@ -2108,22 +2186,22 @@ static struct dn {
 
 /***
 Obtain a standard directory name.
-This is a wrapper for `g_get_*_dir()`
+This is a wrapper for `g_get_*_dir()`.
 @function get_dir_name
 @tparam string d The directory to obtain; one of
-     'cache', 'config', 'data', 'desktop', 'documents', 'download',
-     'home', 'music', 'pictures', 'runtime', 'share', 'system_config',
-     'system_data', 'templates', 'tmp', 'videos', 'help'
- 'help' just returns this list of names.
-@treturn string|{string,...}|nil The directory (a string) if there can be only
+     `cache`, `config`, `data`, `desktop`, `documents`, `download`,
+     `home`, `music`, `pictures`, `runtime`, `share`, `system_config`,
+     `system_data`, `templates`, `tmp`, `videos`, `list`.
+ `list` just returns this list of names.
+@treturn string|{string,...} The directory (a string) if there can be only
  one; if there can be more than one, the list of directories is returned
- as a table array of strings.  Currently, only 'help', 'system_data, and
- 'system_config' return more than one.  If there is no standard directory
- of the given kind, returns nil.
+ as a table array of strings.  Currently, only `list`, `system_data`, and
+ `system_config` return more than one.
+@raise If there is no standard directory of the given kind, returns `nil`.
 */
 static int glib_get_dir_name(lua_State *L)
 {
-    const char *n = luaL_optstring(L, 1, "help");
+    const char *n = luaL_optstring(L, 1, "list");
     struct dn *d = bsearch(n, dirnames, NDIRNAMES, sizeof(dirnames[0]), ns_cmp);
     if(!d) {
 	lua_pushnil(L);
@@ -2154,7 +2232,7 @@ static int glib_get_dir_name(lua_State *L)
 
 /***
 Obtain current host name.
-This is a wrapper for `g_get_host_name()`
+This is a wrapper for `g_get_host_name()`.
 @function get_host_name
 @treturn string The local host name.  This is not guaranteed to be a unique
  identifier for the host, or in any way related to its DNS entry.
@@ -2166,8 +2244,8 @@ static int glib_get_host_name(lua_State *L)
 }
 
 /***
-Obtain current working directry.
-This is a wrapper for `g_get_current_dir()`
+Obtain current working directory.
+This is a wrapper for `g_get_current_dir()`.
 @function get_current_dir
 @treturn string The current working directory, as an absolute path.
 */
@@ -2181,7 +2259,7 @@ static int glib_get_current_dir(lua_State *L)
 
 /***
 Check if a directory is absolute.
-This is a wrapper for `g_path_is_absolute()`
+This is a wrapper for `g_path_is_absolute()`.
 @function path_is_absolute
 @tparam string d The directory to check
 @treturn boolean True if d is absolute; false otherwise.
@@ -2194,11 +2272,11 @@ static int glib_path_is_absolute(lua_State *L)
 
 /***
 Split the root part from a path.
-This is a wrapper for `g_path_skip_root()`
+This is a wrapper for `g_path_skip_root()`.
 @function path_split_root
 @tparam string d The path to split
 @treturn string|nil The root part.  If the path is not absolute, this will be
- nil.
+ `nil`.
 @treturn string The non-root part
 */
 static int glib_path_split_root(lua_State *L)
@@ -2216,7 +2294,7 @@ static int glib_path_split_root(lua_State *L)
 
 /***
 Obtain the last element of a path.
-This is a wrapper for `g_path_basename()`
+This is a wrapper for `g_path_basename()`.
 @function path_get_basename
 @tparam string d The path to split
 @treturn string The last path element of the path
@@ -2232,10 +2310,10 @@ static int glib_path_get_basename(lua_State *L)
 
 /***
 Obtain all but the last element of a path.
-This is a wrapper for `g_path_dirname()`
+This is a wrapper for `g_path_dirname()`.
 @function path_get_dirname
 @tparam string d The path to split
-@return All but the last element of the path.
+@treturn string All but the last element of the path.
 */
 /* note that cmorris rejected the result if it was . */
 static int glib_path_get_dirname(lua_State *L)
@@ -2290,7 +2368,21 @@ static void free_varargs(lua_State *L, gchar **args, int skip)
 
 /***
 Construct a file name from its path constituents.
-This is a wrapper for `g_build_filenamev()`
+This is a wrapper for `g_build_filenamev()`.  There is no inverse operation,
+but it can be implemented in Lua:
+
+    function split_filename(f)
+        local res = {}
+        local r
+        r, f = glib.path_split_root(f)
+        while f ~= '' do
+            local b = glib.path_get_basename(f)
+            table.insert(res, 1, b)
+            if b == f then break end
+            f = glib.path_get_dirname(f)
+        end
+        return r, res
+    end
 @function build_filename
 @tparam {string,...}|string,... ... If the first parameter is a table, this
  table contains a list of path element strings.  Otherwise, all parameters
@@ -2310,7 +2402,24 @@ static int glib_build_filename(lua_State *L)
 
 /***
 Construct a path from its constituents.
-This is a wrapper for `g_build_pathv()`
+This is a wrapper for `g_build_pathv()`.  Note that blank elements are
+simply ignored.  If blank elements are required, use Lua instead:
+
+    function build_path(sep, ...)
+        local i, v
+        local ret = ''
+         for i, v in ipairs{...} do
+           if i > 1 then ret = ret .. sep end
+           ret = ret .. v
+         end
+    end
+
+Also, there is no inverse function.  This can be emulated using `regex:split`:
+
+    function split_path(p, sep)
+       local rx = glib.regex_new(glib.regex_escape_string(sep))
+       return rx:split(p)
+    end
 @function build_path
 @see build_filename
 @tparam string sep The path element separator
@@ -2333,12 +2442,12 @@ static int glib_build_path(lua_State *L)
 
 /***
 Print sizes in scientific notation.
-This is a wrapper for `g_format_size_full()`
+This is a wrapper for `g_format_size_full()`.
 @function format_size
 @tparam number size The size to format
-@tparam boolean pow2 (optional) Set to true to use power-of-2 units rather
+@tparam[opt] boolean pow2 Set to true to use power-of-2 units rather
  than power-of-10 units.
-@tparam boolean long (optional) Set to true to display the full size, in
+@tparam[optchain] boolean long Set to true to display the full size, in
  parentheses, after the short size.
 @treturn string A string representing the size with SI units
 */
@@ -2360,11 +2469,11 @@ static int glib_format_size(lua_State *L)
 
 /***
 Locate an executable using the operating system's search method.
-This is a wrapper for `g_find_program_in_path()`
+This is a wrapper for `g_find_program_in_path()`.
 @function find_program_in_path
 @tparam string p The program name to find
-@treturn string|nil An absolute path to the program, or nil if it can't be
- found.
+@treturn string|nil An absolute path to the program.
+@raise Returns `nil` if *p* can't be  found.
 */
 static int glib_find_program_in_path(lua_State *L)
 {
@@ -2423,17 +2532,18 @@ static int qsort_fun(gconstpointer _a, gconstpointer _b, gpointer l)
 /***
 Sort a table using a stable quicksort algorithm.
 This is a wrapper for `g_qsort_with_data()`.  This sorts a table
-in-place the same way as table.sort() does, but it performs an extra
+in-place the same way as `table.sort` does, but it performs an extra
 comparison if necessary to determine of two elements are equal (i.e.,
 *cmp*(a, b) == *cmp*(b, a) == false).  If so, they are sorted in the
 order they appeared in the original table.  The extra comparison can be
-avoided by returning a number instead of a boolean; in this case, the
-number's relationship with 0 indicates a's relationship with b.
+avoided by returning a number instead of a boolean from the comparison
+function; in this case, the number's relationship with 0 indicates a's
+relationship with b.
 @function qsort
 @see utf8_collate
 @see cmp
 @tparam table t Table to sort
-@tparam function cmp (optional) Function to use for comparison; takes two
+@tparam[opt] function cmp Function to use for comparison; takes two
  table elements and returns true if the first is less than the second.  If
  not specified, Lua's standard less-than operator is used.  The function
  may also return an integer instead of a boolean, in which case the number
@@ -2574,7 +2684,7 @@ static int free_timer_state(lua_State *L)
 
 /***
 Create a stopwatch-like timer.
-This is a wrapper for `g_timer_new()`
+This is a wrapper for `g_timer_new()`.
 @function timer_new
 @treturn timer A timer object
 */
@@ -2590,7 +2700,7 @@ static int glib_timer_new(lua_State *L)
 */
 /***
 Start or reset the timer.
-This is a wrapper for `g_timer_start()`
+This is a wrapper for `g_timer_start()`.
 @function timer:start
 */
 static int timer_start(lua_State *L)
@@ -2603,7 +2713,7 @@ static int timer_start(lua_State *L)
 
 /***
 Stop the timer if it is running.
-This is a wrapper for `g_timer_stop()`
+This is a wrapper for `g_timer_stop()`.
 @function timer:stop
 */
 static int timer_stop(lua_State *L)
@@ -2616,7 +2726,7 @@ static int timer_stop(lua_State *L)
 
 /***
 Resume the timer if it is stopped.
-This is a wrapper for `g_timer_continue()`
+This is a wrapper for `g_timer_continue()`.
 @function timer:continue
 */
 static int timer_continue(lua_State *L)
@@ -2629,7 +2739,7 @@ static int timer_continue(lua_State *L)
 
 /***
 Return the amount of time counted so far.
-This is a wrapper for `g_timer_elapsed()`
+This is a wrapper for `g_timer_elapsed()`.
 @function timer:elapsed
 @treturn number The time counted so far, in seconds.
 */
@@ -2882,7 +2992,8 @@ passed in as the proposed process name.  In addition to the command arguments
 and *cmd* field, the following fields specify options for the spawned
 command:
 
- * *stdin*: **file|string|boolean** (default = false) Specify the standard
+**stdin**: file|string|boolean (default = false)
+:  Specify the standard
    input to the process.  If this is a file descriptor, it must
    be opened in read mode; its contents will be the process'
    standard input.  If this is a string, it names a file to
@@ -2895,7 +3006,8 @@ command:
    proc:write() writes to the process, and false means that
    no standard input should be provided at all (equivalent to
    UNIX /dev/null).
- * *stdout*: **file|string|boolean** (default = true) Specify the standard
+**stdout**: file|string|boolean (default = true)
+:  Specify the standard
    output for the process.  If this is a file descriptor, it must
    be opened in write mode; the process' standard output will be
    written to that file.  If this is a string, it names a file to
@@ -2907,26 +3019,51 @@ command:
    boolean; true means that a pipe should be opened such that
    proc:read() reads from the process, and false means that
    standard output should be ignored.
- * *stderr*: **file|string|boolean** (default = "") Specify the standard
-   error for the process.  See the *stdout* description for
+**stderr**: file|string|boolean (default = "")
+:  Specify the standard
+   error for the process.  See the **stdout** description for
    details; the only difference is in which functions are used
    to read from the pipe (read\_err and friends).
- * *env*: **table** Specify the environment for the process.  If this
+**env**: table
+:  Specify the environment for the process.  If this
    is not provided, the environment is inherited from the parent.
    Otherwise, all keys in the table correspond to variables, and
    the values correspond to those variables' values.  Only these
    variables will be set in the spawned process.
- * *path* **boolean** (default = true) If this is present and false, do
+**path**: boolean (default = true)
+:  If this is present and false, do
    not use the standard system search path to find the command
    to execute.
- * *chdir* **string** If this is present, change to the given directory
+**chdir**: string
+:  If this is present, change to the given directory
    when executing the commmand.  Otherwise, it will execute in the
    current working directory.
- * *cmd* **string** If this is present, and there are no array entries in
+**cmd**: string
+:  If this is present, and there are no array entries in
    this table, it is parsed as a shell command to construct the
    command to run.  Otherwise, it is the command to execute instead
    of the first element of the argument array.
 @treturn process An object representing the process.
+@usage
+-- fully quoted arguments
+p = glib.spawn {'cat', f}
+f_cont = p:wait()
+
+-- generic command line; parsed by glib rather than shell so relatively safe
+p = glib.spawn(cmd='cat /tmp/xyz')
+xyz_cont = p:wait()
+
+-- fully quoted arguments, but with renamed argv[0] if supported
+p = glib.spawn('concatenate', f, cmd='/bin/cat')
+f_cont = p:wait()
+
+-- write output to a file
+-- more portable than tacking >file to the command
+of = open('/tmp/of', 'w')
+p = glib.spawn('cat', f, stdout=of)
+p:wait()
+of:close()
+@see shell_parse_argv
 */
 static int glib_spawn(lua_State *L)
 {
@@ -3338,9 +3475,9 @@ might hang waiting for input even when enough data is available, depending
 on operating system.  On Linux, at least, it should never hang.
 @function process:read_ready
 @see process:read
-@tparam string|number ... See read for details.  For the '*n' format, since
-it is difficult to tell how much input will be required, the thread will
-read until it finds a non-blank word.
+@tparam string|number ... See `process:read` for details.  For the '*n'
+ format, since it is difficult to tell how much input will be required, the
+ thread will read until it finds a non-blank word.
 @treturn boolean True if reading using the given format(s) will succeed
  without blocking.
 */
@@ -3357,10 +3494,10 @@ static int out_ready(lua_State *L)
 
 /***
 Wait for input to be available from process standard error.
-See the documentation for read\_ready for details.
+See the documentation for `process:read_ready` for details.
 @function process:read_err_ready
 @see process:read_ready
-@tparam string|number ... See read\_ready for details. 
+@tparam string|number ... See `process:read_ready` for details. 
 @treturn boolean True if reading using the given format(s) will succeed
  without blocking.
 */
@@ -3494,13 +3631,13 @@ static int read_pipe(lua_State *L, spawn_state *st, int whichout,
 
 /***
 Read data from a process' standard output.
-This function is a clone of the standard Lua file:read function.  It defers
-actual I/O to the read\_ready routine, which in turn lets a background
-thread do all of the reading.  It will block until read\_ready is true, and
-then read directly from the buffer read by the thread.
+This function is a clone of the standard Lua `file:read` function.  It defers
+actual I/O to the `process:read_ready` routine, which in turn lets a background
+thread do all of the reading.  It will block until process:read_ready` is true,
+and then read directly from the buffer read by the thread.
 @function process:read
 @see process:read_ready
-@tparam string|number ... If no paramters are given, read a single
+@tparam string|number ... If no parameters are given, read a single
  newline-terminated line from input, and strip the trailing newline.
  Otherwsie, for each parameter, until failure, a result is read and
  returned based on the parameter.  If the parameter is a number, then
@@ -3511,12 +3648,12 @@ then read directly from the buffer read by the thread.
  * '*n' -- read a number from input; in this case, a number is returned
            instead of a string.
  * '*a' -- read the entire remainder of the input.  Note that if this
-           is given as a format to read\_ready, all standard output
+           is given as a format to `process:read_ready`, all standard output
            from the process will be read as soon as it is available.
 
 @treturn string|number|nil... For each parameter (or for the line read by the
  empty parameter list), the results of reading that format are returned.
- If an error occurred for any parameter, nil is returned for that parameter
+ If an error occurred for any parameter, `nil` is returned for that parameter
  and no further parameters are processed.
 */
 static int out_read(lua_State *L)
@@ -3527,7 +3664,7 @@ static int out_read(lua_State *L)
 
 /***
 Read data from a process' standard error.
-See the read function documentation for details.
+See the `process:read` function documentation for details.
 @function process:read_err
 @see process:read
 @tparam string|number ... See the read function documentation for details.
@@ -3547,7 +3684,7 @@ static int out_lines_iter(lua_State *L)
 
 /***
 Return an iterator which reads lines from the process' standard output.
-On each iteration, this returns the result of read().
+On each iteration, this returns the result of `process:read`().
 @function process:lines
 @see process:read
 @treturn function The iterator.
@@ -3568,7 +3705,7 @@ static int err_lines_iter(lua_State *L)
 
 /***
 Return an iterator which reads lines from the process' standard error.
-On each iteration, this returns the result of read\_err().
+On each iteration, this returns the result of `process:read_err`().
 @function process:lines_err
 @see process:read_err
 @treturn function The iterator.
@@ -3618,7 +3755,7 @@ writes will bock until the previous write has completed.
 @treturn boolean Returns true on success.  However, since the write has
  not truly completed until the background writer has finished, the only
  way to ensure that writing was complete and successful is to use
- write\_ready or io\_wait.
+ `process:write_ready` or `process:io_wait`.
 */
 static int in_write(lua_State *L)
 {
@@ -3694,11 +3831,11 @@ static int in_close(lua_State *L)
 Check for process activity.
 Check to see if I/O is in progress or the process has died.
 @function process:io_wait
-@tparam boolean check_in (optional) Return a flag indicating if the
+@tparam[opt] boolean check_in Return a flag indicating if the
  background standard input writer is idle.
-@tparam boolean check_out (optional) Return a flag indicating if the
+@tparam[optchain] boolean check_out Return a flag indicating if the
  background standard output reader is idle.
-@tparam boolean check_err (optional) Return a flag indicating if the
+@tparam[optchain] boolean check_err Return a flag indicating if the
  background standard error reader is idle.
 @treturn boolean True if the standard input thread is idle; only returned if
  requested
@@ -3747,7 +3884,7 @@ static int proc_pid(lua_State *L)
 /***
 Return the status of the running process.
 @function process:status
-@treturn string|number If the process is running, the string 'running'
+@treturn string|number If the process is running, the string `running`
  is returned.  Otherwise, the numeric exit code from the process
  is returned.
 */
@@ -3909,7 +4046,7 @@ File Utilities
 /***
 Return contents of a file as a string.
 This function is a wrapper for `g_file_get_contents()`.
-It is mostly equivalent to io.open(*name*):read('\*a').
+It is mostly equivalent to `io.open(*name*):read('\*a')`.
 @function file_get
 @tparam string name Name of file to read
 @treturn string|nil Contents of file, or nil if there was an error.
@@ -3968,7 +4105,7 @@ static int glib_file_set(lua_State *L)
 
 /***
 Test if the given path points to a file.
-This function is a wrapper for `g_file_test()`
+This function is a wrapper for `g_file_test()`.
 @function is_file
 @tparam string name The path name to test
 @treturn boolean true if *name* names a plain file
@@ -3976,7 +4113,7 @@ This function is a wrapper for `g_file_test()`
 file_test(IS_REGULAR, is_file)
 /***
 Test if the given path points to a directory.
-This function is a wrapper for `g_file_test()`
+This function is a wrapper for `g_file_test()`.
 @function is_dir
 @tparam string name The path name to test
 @treturn boolean true if *name* names a plain file
@@ -4161,7 +4298,7 @@ Change default file and directory creation permissions mask.
 This is a wrapper for the system `umask()` function, since there is no
 equivalent in GLib.
 @function umask
-@tparam string|number mask (Optional) The permissions mask.  Permissions set in
+@tparam[opt] string|number mask The permissions mask.  Permissions set in
  this mask are forced off in any newly created files and directories.
  Either a numeric permissions mask or a POSIX-sytle mode string (e.g.
  'og=w', which is the default if this parameter is unspecified).
@@ -4180,12 +4317,12 @@ file by replacing the X characters in a template with six consecutive X
 characters.
 @function mkstemp
 @tparam string tmpl The template.
-@tparam string|number perm (Optional) File creation permissions.  Either a
+@tparam[opt] string|number perm File creation permissions.  Either a
  numeric permission mask or a POSIX-style mode string (e.g. 'ug=rw').
-@treturn nil|file Returns nil on error, and a file descriptor on success.
-The file is open for reading and writing (w+b).
-@treturn string Returns an error message on error, or the modified file
-name.
+@treturn file A file descriptor for the newly created file, open for
+ reading and writing (`w+b`).
+@treturn string The name of the created file.
+@raise Returns `nil` and error message string on error.
 */
 static int glib_mkstemp(lua_State *L)
 {
@@ -4232,12 +4369,12 @@ This function is a wrapper for `g_file_open_tmp()`.  It creates a new,
 unique file by replacing the X characters in a template with six consecutive
 X characters.  The template may contain no directory separators.
 @function open_tmp
-@tparam string tmpl (Optional) The template.  If unspecified, a default
+@tparam[opt] string tmpl The template.  If unspecified, a default
  template will be used.
-@treturn nil|file Returns nil on error, and a file descriptor on success.
-The file is open for reading and writing (w+b).
-@treturn string returns an error message on error, or the full path to the
-newly created file.
+@treturn file A file descriptor for the newly created file, open for
+ reading and writing (`w+b`).
+@treturn string The full path name of the created file.
+@raise Returns `nil` and error message string on error.
 */
 static int glib_open_tmp(lua_State *L)
 {
@@ -4275,11 +4412,11 @@ static int glib_open_tmp(lua_State *L)
 
 /***
 Read the contents of a soft link.
-This is a wrapper for `g_file_read_link()`
+This is a wrapper for `g_file_read_link()`.
 @function read_link
 @tparam string name Link to read
-@treturn string|nil Link contents, or nil on error
-@treturn string Error message on error
+@treturn string Link contents
+@raise Returns `nil` and error message string on error.
 */
 static int glib_read_link(lua_State *L)
 {
@@ -4299,14 +4436,14 @@ static int glib_read_link(lua_State *L)
 
 /***
 Create a directory and any required parent directories.
-This is a wrapper for `g_mkdir_with_parents()`
+This is a wrapper for `g_mkdir_with_parents()`.
 @function mkdir_with_parents
 @tparam string name Name of directory to create.
-@tparam string|number mode (Optional) File permissions.  Either a numeric
+@tparam[opt] string|number mode File permissions.  Either a numeric
  creation mode or a POSIX-style mode string (e.g. 'ug=rw').  If unspecified,
  'a=rx,u=w' is used (octal 755).
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int glib_mkdir_with_parents(lua_State *L)
 {
@@ -4330,10 +4467,10 @@ This is a wrapper for `g_mkdtemp`.  It replaces 6 consecutive Xs in the
 pattern with a unique string and creates a directory by that name.
 @function mkdtemp
 @tparam string tmpl The file name pattern
-@tparam string|number mode (Optional) File permissions.  Either a numeric
+@tparam[opt] string|number mode File permissions.  Either a numeric
  creation mode or a POSIX-style mode string (e.g. 'ug=rw').
-@treturn string|nil The name of the created directory, or nil on error.
-@treturn string The error message if an error occured.
+@treturn string The name of the created directory
+@raise Returns `nil` and error message string on error.
 */
 static int glib_mkdtemp(lua_State *L)
 {
@@ -4359,10 +4496,10 @@ This is a wrapper for `g_dir_make_tmp()`.  It creates a new, unique
 directory in the standard temporary directory by replacing 6 consecutive
 Xs in the template.
 @function dir_make_tmp
-@tparam string tmpl (Optional) The template.  If unspecified, a default
+@tparam[opt] string tmpl The template.  If unspecified, a default
  template will be used.
-@treturn string|nil The name of the created directory, or nil on error.
-@treturn string An error message on error.
+@treturn string The name of the created directory
+@raise Returns `nil` and error message string on error.
 */
 static int glib_dir_make_tmp(lua_State *L)
 {
@@ -4415,8 +4552,8 @@ Returns an iterator which lists entries in a directory.
 This function wraps `g_dir_open()` and friends.
 @function dir
 @tparam string d The directory to list
-@treturn nil|function Iterator or nil on error
-@treturn string Error message on error
+@treturn function Iterator
+@raise Returns `nil` and error message string on error.
 */
 static int glib_dir(lua_State *L)
 {
@@ -4435,12 +4572,12 @@ static int glib_dir(lua_State *L)
 
 /***
 Rename a file sytem entity.
-This is a wrapper for `g_rename()`
+This is a wrapper for `g_rename()`.
 @function rename
 @tparam string old The old name
 @tparam string new The new name
-@treturn boolean ok True on success.
-@treturn string msg Error message on failure.
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int glib_rename(lua_State *L)
 {
@@ -4457,12 +4594,14 @@ static int glib_rename(lua_State *L)
 
 /***
 Create a directory.
-This is a wrapper for `g_mkdir()`
+This is a wrapper for `g_mkdir()`.
 @function mkdir
 @tparam string name The name of the directory.
-@tparam string|number mode (Optional) File permissions.  Either a numeric
+@tparam[opt] string|number mode File permissions.  Either a numeric
  creation mode or a POSIX-style mode string (e.g. 'ug=rw').  The default
  is 'a=rx,u=w' (octal 755).
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int glib_mkdir(lua_State *L)
 {
@@ -4585,15 +4724,14 @@ indicator to return information about a soft link rather than what it
 points to.
 @function stat
 @tparam string name The file system entry to query
-@tparam {string,...}|string,... fields (Optional) The fields to query, in
+@tparam[opt] {string,...}|string,... fields The fields to query, in
  order.
 @treturn table A table whose keys are field names and whose values are
  the value for that field, if either no specific values are requested or
  the only value requested is the psuedo-value 'link'.
 @treturn number|string|nil The value of each field; multiple values may be
- returned.
-@treturn nil First returned value if there was an error
-@treturn string Second returned value on error: an error message.
+ returned.  Unknown fields return `nil`.
+@raise Returns `nil` and error message string on error.
 */
 /* FIXME: support nanosecond time stamps (no portable way to detect) */
 static int glib_stat(lua_State *L)
@@ -4738,12 +4876,36 @@ static int glib_stat(lua_State *L)
 
 /***
 Remove a file sytem entity.
-This is a wrapper for `g_remove()`
-@function rename
+This is a wrapper for `g_remove()`.  For recursive removal, use Lua:
+
+    function rm_r(f)
+        local ok, msg, err, gmsg
+        if not glib.is_symlink(f) and glib.is_dir(f) then
+            local e
+            for e in glib.dir(f) do
+                ok, msg = rm_r(glib.build_filename(f, e))
+                if not ok and not err then
+                    err = true
+                    gmsg = msg
+                end
+            end
+        end
+        ok, msg = glib.remove(f)
+        if not ok and not err then
+             err = true
+             gmsg = msg
+        end
+        if err then
+             return false, gmsg
+        else
+             return true
+        end
+    end
+@function remove
 @tparam string name The entity to remove
-@treturn boolean ok True on success.
-@treturn string msg Error message on failure.  Note that the error message
- is probably invalid if the entity was not a directory.
+@treturn boolean True on success.
+@raise Returns false and an error message string on failure.  Note that the
+ error message is probably invalid if the entity was not a directory.
 */
 static int glib_remove(lua_State *L)
 {
@@ -4765,8 +4927,8 @@ file for information if a string-style permission is used.
 @function chmod
 @tparam string name The filesystem entry to modify
 @tparam string|number perm Permissions to set.
-@treturn boolean True if no error
-@treturn string Message if error
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int glib_chmod(lua_State *L)
 {
@@ -4848,11 +5010,11 @@ static int glib_can_write(lua_State *L)
 
 /***
 Change current working directory.
-This is a wrapper for `g_chdir()`
+This is a wrapper for `g_chdir()`.
 @function chdir
 @tparam string dir Name of directory to change into
-@treturn boolean true if successful
-@treturn string message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int glib_chdir(lua_State *L)
 {
@@ -4869,16 +5031,17 @@ static int glib_chdir(lua_State *L)
 
 /***
 Change timestamp on filesystem object.
-This is a wrapper for `g_utime()`
+This is a wrapper for `g_utime()`.
 @function utime
 @tparam string name Name of entry to touch
-@tparam number|nil mtime (Optional) modification time; current time is used
- if not present and *atime* not present; left alone if only *atime* is
- present.
-@tparam number|nil atime (Optional) access time; modification time is
- used if not present.
-@treturn boolean true on success
-@treturn string error message on failure
+@tparam[opt] number|nil atime access time; *mtime* is used if not present.
+ Note that *atime* may not be supported by the target file system entry;
+ no error is returned even if that is the case.
+@tparam[optchain] number|nil mtime modification time; current time is used
+ if neither *atime* nor *mtime* present; left alone if *atime* present but
+ *mtime* not present
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 /* FIXME: this function is pretty useless:
  *   - it doesn't support even microsecond resolution (utimes)
@@ -4889,21 +5052,21 @@ static int glib_utime(lua_State *L)
 {
     struct utimbuf t;
     const char *s = luaL_checkstring(L, 1);
-    gboolean has_mtime = !lua_isnoneornil(L, 2),
-	     has_atime = !lua_isnoneornil(L, 3);
+    gboolean has_atime = !lua_isnoneornil(L, 2),
+	     has_mtime = !lua_isnoneornil(L, 3);
     int ret;
 
     if(has_mtime)
-	t.modtime = lua_tonumber(L, 2);
+	t.modtime = lua_tonumber(L, 3);
     else if(has_atime) {
 	GStatBuf sbuf;
 	if(!g_stat(s, &sbuf))
 	    t.modtime = sbuf.st_mtime;
 	else
-	    t.modtime = lua_tonumber(L, 3);
+	    t.modtime = lua_tonumber(L, 2);
     }
     if(has_atime)
-	t.actime = lua_tonumber(L, 3);
+	t.actime = lua_tonumber(L, 2);
     else
 	t.actime = t.modtime;
     if(has_atime || has_mtime)
@@ -4929,34 +5092,41 @@ URI Functions
 /* defined below */
 /***
 Allowed characters in a path.
+This is a wrapper for `G_URI_RESERVED_CHARS_ALLOWED_IN_PATH`.
 @table uri_reserved_chars_allowed_in_path
 */
 
 /***
 Allowed characters in path elements.
+This is a wrapper for `G_URI_RESERVED_CHARS_ALLOWED_IN_PATH_ELEMENT`.
 @table uri_reserved_chars_allowed_in_path_element
 */
 
 /***
 Allowed characters in userinfo (RFC 3986).
+This is a wrapper for `G_URI_RESERVED_CHARS_ALLOWED_IN_USERINFO`.
 @table uri_reserved_chars_allowed_in_userinfo
 */
 
 /***
 Generic delimiter characters (RFC 3986).
+This is a wrapper for `G_URI_RESERVED_CHARS_GENERIC_DELIMITERS`.
 @table uri_reserved_chars_generic_delimiters
 */
 
 /***
 Subcomponent delimiter characters (RFC 3986).
+This is a wrapper for `G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS`.
 @table uri_reserved_chars_subcomponent_delimiters
 */
 
 /***
 Extract scheme from URI.
+This is a wrapper for `g_uri_parse_scheme()`.
 @function uri_parse_scheme
 @tparam string uri The valid URI
-@treturn string|nil The scheme, or nil on error.
+@treturn string The scheme
+@raise Returns `nil` on error.
 */
 static int glib_uri_parse_scheme(lua_State *L)
 {
@@ -4966,10 +5136,11 @@ static int glib_uri_parse_scheme(lua_State *L)
 
 /***
 Escapes a string for use in a URI.
+This is a wrapper for `g_uri_escape_string()`.
 @function uri_escape_string
 @tparam string s The string to esacape; nuls are not allowed.
-@tparam string allow (Optional) Reserved characters to leave unescaped anyway.
-@tparam boolean utf8 (Optional) Allow UTF-8 characters in result.
+@tparam[opt] string allow Reserved characters to leave unescaped anyway.
+@tparam[optchain] boolean utf8 Allow UTF-8 characters in result.
 @treturn string The escaped string.
 */
 static int glib_uri_escape_string(lua_State *L)
@@ -4984,11 +5155,13 @@ static int glib_uri_escape_string(lua_State *L)
 
 /***
 Unescapes an escaped string.
+This is a wrapper for `g_uri_unescape_string()`.
 @function uri_unescape_string
 @tparam string s The string to unescape
-@tparam string illegal (Optional) Characters which may not appear in the
+@tparam[opt] string illegal Characters which may not appear in the
  result; nul characters are automatically illegal.
 @treturn string The unescaped string.
+@raise Returns `nil` on error.
 */
 static int glib_uri_unescape_string(lua_State *L)
 {
@@ -5001,6 +5174,7 @@ static int glib_uri_unescape_string(lua_State *L)
 
 /***
 Splits an URI list conforming to the text/uri-list MIME type (RFC 2483).
+This is a wrapper for `g_uri_list_extract_uris()`.
 @function uri_list_extract_uris
 @tparam string list The URI list
 @treturn {string,...} A table containing the URIs
@@ -5021,11 +5195,12 @@ static int glib_uri_list_extract_uris(lua_State *L)
 
 /***
 Converts an ASCII-encoded URI to a local filename.
+This is a wrapper for `g_filename_from_uri()`.
 @function filename_from_uri
 @tparam string uri The URI
-@treturn string|nil The file name, or nil on error.
-@treturn string|nil The host name, or nil if none, or error message if
- error
+@treturn string The file name
+@treturn string|nil The host name, or `nil` if none
+@raise Returns `nil` and error message string on error.
 */
 static int glib_filename_from_uri(lua_State *L)
 {
@@ -5048,11 +5223,12 @@ static int glib_filename_from_uri(lua_State *L)
 
 /***
 Converts an absolute filename to an escaped ASCII-encoded URI.
+This is a wrapper for `g_filename_to_uri()`.
 @function filename_to_uri
 @tparam string file The filename
-@tparam string host (Optional) The host name
-@treturn string|nil The URI, or nil on error.
-@treturn string The error message on error.
+@tparam[opt] string host The host name
+@treturn string The URI
+@raise Returns `nil` and error message string on error.
 */
 static int glib_filename_to_uri(lua_State *L)
 {
@@ -5079,9 +5255,11 @@ Hostname Utilities.
 
 /***
 Convert a host name to its canonical ASCII form.
+This is a wrapper for `g_hostname_to_ascii()`.
 @function hostname_to_ascii
 @tparam string hostname The name to convert
-@treturn string|nil The converted name, or nil on error
+@treturn string The converted name
+@raise Returns `nil` on error.
 */
 static int glib_hostname_to_ascii(lua_State *L)
 {
@@ -5094,9 +5272,11 @@ static int glib_hostname_to_ascii(lua_State *L)
 
 /***
 Convert a host name to its canonical Unicode form.
+This is a wrapper for `g_hostname_to_unicode()`.
 @function hostname_to_unicode
 @tparam string hostname The name to convert
-@treturn string|nil The converted name, or nil on error
+@treturn string The converted name
+@raise Returns `nil` on error.
 */
 static int glib_hostname_to_unicode(lua_State *L)
 {
@@ -5109,6 +5289,7 @@ static int glib_hostname_to_unicode(lua_State *L)
 
 /***
 Check if a host name contains Unicode characters.
+This is a wrapper for `g_hostname_is_non_ascii()`.
 @function hostname_is_non_ascii
 @tparam string hostname The name to check
 @treturn boolean True if the host name needs to be converted to ASCII for
@@ -5122,6 +5303,7 @@ static int glib_hostname_is_non_ascii(lua_State *L)
 
 /***
 Check if a host name contains ASCII-encoded Unicode characters.
+This is a wrapper for `g_hostname_is_ascii_encoded()`.
 @function hostname_is_ascii_encoded
 @tparam string hostname The name to check
 @treturn boolean True if the host name needs to be converted to Unicode for
@@ -5135,6 +5317,7 @@ static int glib_hostname_is_ascii_encoded(lua_State *L)
 
 /***
 Check if a string is an IPv4 or IPv6 numeric address.
+This is a wrapper for `g_hostname_is_ip_address()`.
 @function hostname_is_ip_address
 @tparam string hostname The name to check
 @treturn boolean True if the host name is actually an IP address
@@ -5154,11 +5337,11 @@ Shell-related Utilities.
 /***
 Parse a command line into an argument vector, but without variable and
 glob pattern expansion.
+This is a wrapper for `g_shell_parse_argv()`.
 @function shell_parse_argv
 @tparam string cmdline The command line to parse
-@treturn {string,...}|nil A table containing the command-line arguments, or
- nil on error
-@treturn string An error message on error
+@treturn {string,...} A table containing the command-line arguments
+@raise Returns `nil` and error message string on error.
 */
 static int glib_shell_parse_argv(lua_State *L)
 {
@@ -5181,6 +5364,7 @@ static int glib_shell_parse_argv(lua_State *L)
 
 /***
 Quote a string so it is interpreted unmodified as a shell argument.
+This is a wrapper for `g_shell_quote()`.
 @function shell_quote
 @tparam string s The string to quote
 @treturn string The quoted string
@@ -5195,10 +5379,11 @@ static int glib_shell_quote(lua_State *L)
 
 /***
 Unquote a string quoted for use as a shell argument.
+This is a wrapper for `g_shell_unquote()`.
 @function shell_unquote
 @tparam string s The string to unquote
-@treturn string|nil The unquoted string, or nil on error.
-@treturn string An error message on error
+@treturn string The unquoted string
+@raise Returns `nil` and error message string on error.
 */
 static int glib_shell_unquote(lua_State *L)
 {
@@ -5292,26 +5477,57 @@ static gboolean get_mfl(lua_State *L, int index, GRegexMatchFlags *mfl,
 	    }
 	    lua_pop(L, 1);
 	}
+	if(*do_all && (*mfl & G_REGEX_MATCH_PARTIAL)) {
+	  lua_pushnil(L);
+	  lua_pushliteral(L, "Partial mode and All mode are incompatible");
+	  return FALSE;
+	}
     }
     return TRUE;
 }
 
 /***
 Compile a regular expression for use in matching functions.
+This is a wrapper for `g_regex_new()`.  See in particular the
+Regular expression syntax section of the GLib documentation.
 @function regex_new
 @tparam string pattern The regular expression.  Note that embedded NUL
  characters are supported.
-@tparam {string,...} cflags (Optional) Compile flags: 'caseless',
- 'multiline', 'dotall', 'extended', 'anchored', 'dollar\_endonly',
- 'ungreedy', 'raw', 'no\_auto\_capture', 'optimize', 'dupnames',
- 'newline\_cr', 'newline\_lf', 'newline\_crlf'
-@tparam {string,...} mflags (Optional) Match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'partial', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any', 'all'.  'all' changes the
- behavior of matches from returning captures to returning all potential
- matches.
-@treturn regex|nil The compiled regular expression, or nil on error
-@treturn string The error message on error
+@tparam[opt] {string,...} cflags Compile flags (note: some may be set
+by the library based on the pattern input):
+
+  * `caseless` -- Case-insensitive search
+  * `multiline` -- ^ and $ match newlines in search strings
+  * `dotall` -- . matches newlines
+  * `extended` -- unescaped whitespace and unescaped # .. newline ignored
+  * `anchored` -- pattern must match at start of string
+  * `dollar_endonly` -- $ does not match newline at end of string
+  * `ungreedy` -- Invert greediness of variable-length matches
+  * `raw` -- Strings are sequences of bytes rather than UTF-8
+  * `no_auto_capture` -- Plain () does not capture (use explicitly named captures)
+  * `optimize` -- Optimize the regular expression
+  * `dupnames` -- Do not enforce unique subpattern names
+  * `newline_cr` -- Newlines for $, ^, and . are \\r (default: any).
+  * `newline_lf` -- Newlines for $, ^, and . are \\n (default: any).
+  * `newline_crlf` --  Newlines for $, ^, and . are \\r\\n (default: any).
+@tparam[optchain] {string,...} mflags Match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z and \\z do)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching; incompatible with `all`
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+  * `all` -- changes the behavior of matches from returning captures to
+    returning all potential matches.  That is, any variable-length matching
+    operator will attempt to match at every possible length, rather than the
+    most/least greedy depending on the ungreedy option an the ? greediness
+    operator.  This is incompatible with captures and partial matching.
+@treturn regex The compiled regular expression
+@raise Returns `nil` and error message string on error.
 */
 static int glib_regex_new(lua_State *L)
 {
@@ -5481,20 +5697,26 @@ static int regex_get_match_flags(lua_State *L)
     get_udata(L, 1, st, regex_state);
     mf = g_regex_get_match_flags(st->rex);
     for(i = nfl = 0; i < NUM_COMP_FLAGS; i++)
-	if(exec_flags[i].flag & mf)
+	if(exec_flags[i].flag > 0 && (exec_flags[i].flag & mf))
 	    ++nfl;
+    if(st->do_all)
+	++nfl;
     lua_createtable(L, nfl, 0);
     for(i = nfl = 0; i < NUM_COMP_FLAGS; i++)
-	if(exec_flags[i].flag & mf) {
+	if(exec_flags[i].flag > 0 && (exec_flags[i].flag & mf)) {
 	    ++nfl;
 	    lua_pushstring(L, exec_flags[i].name);
 	    lua_rawseti(L, -2, nfl);
 	}
+    if(st->do_all) {
+	lua_pushliteral(L, "all");
+	lua_rawseti(L, -2, nfl + 1);
+    }
     return 1;
 }
 
 static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
-			GMatchInfo **mi, const char **s)
+			GMatchInfo **mi, const char **s, const char *no_all)
 {
     GError *err = NULL;
     size_t len;
@@ -5507,8 +5729,18 @@ static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
     do_all = st->do_all;
     if(!get_mfl(L, 4, &mfl, &do_all))
 	return 2;
+    if(do_all && no_all) {
+	lua_pushnil(L);
+	lua_pushstring(L, no_all);
+	return 2;
+    }
     *partial = (mfl & G_REGEX_MATCH_PARTIAL) ||
 	       (g_regex_get_match_flags(st->rex) & G_REGEX_MATCH_PARTIAL);
+    if(do_all && *partial) {
+	lua_pushnil(L);
+	lua_pushliteral(L, "Partial mode and All mode are incompatible");
+	return 2;
+    }
     if(do_all)
 	*matched = g_regex_match_all_full(st->rex, *s, len, sp, mfl, mi, &err);
     else
@@ -5538,29 +5770,45 @@ Search for a match in a string.
 @function regex:find
 @see string.find
 @tparam string s The string to search
-@tparam number start (Optional) The start position.
-@tparam {string,...} mflags (Optional) Additional match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'partial', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any', 'all'.  'all' changes the
- behavior of matches from returning captures to returning all potential
- matches.
-@treturn number|nil The location of the start of the first match, or nil
- if there are no matches or an error occurred.
-@treturn number|string The location of the last character of the first
- match, or an error message if an error occurred.
-@treturn boolean Present only if the 'partial' flag is set: true if the
- match was full; false if only partial.
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching; incompatible with `all`
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+  * `all` -- changes the behavior of matches from returning captures to
+    returning all potential matches.  That is, any variable-length matching
+    operator will attempt to match at every possible length, rather than the
+    most/least greedy depending on the ungreedy option an the ? greediness
+    operator.  This is incompatible with captures and partial matching.
+@treturn number|nil|boolean The location of the start of the first match, or
+ `nil` if there are no matches, or false if there is only a partial match,
+ in which case no further results are returned (the location of the match
+ cannot be determined, and there are no captures).
+@treturn number The location of the last character of the first
+ match
 @treturn string,... On a successful match, all captures are returned as
  well
+@raise Returns `nil` and error message string on error.
 */
 static int regex_find(lua_State *L)
 {
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s);
+    int nret = regex_search(L, &matched, &partial, &mi, &s, NULL);
     if(nret)
 	return nret;
+    if(partial && !matched) {
+	lua_pushboolean(L, 0);
+	return 1;
+    }
     {
 	gint start, end;
 
@@ -5568,8 +5816,6 @@ static int regex_find(lua_State *L)
 	lua_pushinteger(L, start + 1);
 	lua_pushinteger(L, end);
     }
-    if(partial)
-	lua_pushboolean(L, matched);
     {
 	int nmatch = g_match_info_get_match_count(mi), i;
 	for(i = 1; i < nmatch; i++) {
@@ -5578,7 +5824,7 @@ static int regex_find(lua_State *L)
 	    lua_pushlstring(L, s + start, end - start);
 	}
 	g_match_info_free(mi);
-	return nmatch + 1 + (partial ? 1 : 0);
+	return nmatch + 1;
     }
 }
 
@@ -5587,31 +5833,42 @@ Search for a match in a string.
 @function regex:match
 @see string.match
 @tparam string s The string to search
-@tparam number start (Optional) The start position.
-@tparam {string,...} mflags (Optional) Additional match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'partial', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any', 'all'.  'all' changes the
- behavior of matches from returning captures to returning all potential
- matches.
-@treturn boolean Present only if the 'partial' flag is set: true if the
- match was full; false if only partial.
-@treturn string|nil The first capture, or the full match if there are no
- captures, or nil if there are no matches or an error occurred.
-@treturn string|nil  The second caputre, or an error message if an error
- occurred.
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching; incompatible with `all`
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+  * `all` -- changes the behavior of matches from returning captures to
+    returning all potential matches.  That is, any variable-length matching
+    operator will attempt to match at every possible length, rather than the
+    most/least greedy depending on the ungreedy option an the ? greediness
+    operator.  This is incompatible with captures and partial matching.
+@treturn string|nil|boolean The first capture, or the full match if there
+ are no captures, or `nil` if there are no matches, or false if there is only
+ a partial match (in which case there are no captures).
 @treturn string,... On a successful match, all remaining captures are
  returned as well
+@raise Returns `nil` and error message string on error.
 */
 static int regex_match(lua_State *L)
 {
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s);
+    int nret = regex_search(L, &matched, &partial, &mi, &s, NULL);
     if(nret)
 	return nret;
-    if(partial)
-	lua_pushboolean(L, matched);
+    if(partial && !matched) {
+	lua_pushboolean(L, 0);
+	return 1;
+    }
     {
 	int nmatch = g_match_info_get_match_count(mi), i;
 	if(nmatch > 1) {
@@ -5621,7 +5878,7 @@ static int regex_match(lua_State *L)
 		lua_pushlstring(L, s + start, end - start);
 	    }
 	    g_match_info_free(mi);
-	    return nmatch - 1 + (partial ? 1 : 0);
+	    return nmatch - 1;
 	} else {
 	    gint start, end;
 
@@ -5649,7 +5906,7 @@ static int free_regex_iter_state(lua_State *L)
     return 0;
 }
 
-static int regex_iter(lua_State *L)
+static int regex_match_iter(lua_State *L)
 {
     gboolean matched;
     get_udata(L, lua_upvalueindex(1), st, regex_iter_state);
@@ -5658,14 +5915,17 @@ static int regex_iter(lua_State *L)
 	return 1;
     }
     matched = g_match_info_matches(st->mi);
-    if(!matched && (!st->partial || !g_match_info_is_partial_match(st->mi))) {
+    if(!matched) {
+	if(st->partial) {
+	    if(g_match_info_is_partial_match(st->mi))
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushnil(L);
+	}
 	g_match_info_free(st->mi);
 	st->mi = NULL;
-	lua_pushnil(L);
 	return 1;
     }
-    if(st->partial)
-	lua_pushboolean(L, matched);
     {
 	int nmatch = g_match_info_get_match_count(st->mi), i;
 	if(nmatch > 1) {
@@ -5675,7 +5935,7 @@ static int regex_iter(lua_State *L)
 		lua_pushlstring(L, st->s + start, end - start);
 	    }
 	    g_match_info_next(st->mi, NULL);
-	    return nmatch - 1 + (st->partial ? 1 : 0);
+	    return nmatch - 1;
 	} else {
 	    gint start, end;
 
@@ -5686,21 +5946,29 @@ static int regex_iter(lua_State *L)
 	}
     }
 }
-    
+
 /***
 Search for all matches in a string.
 @function regex:gmatch
 @see string.gmatch
 @see regex:match
 @tparam string s The string to search
-@tparam number start (Optional) The start position.
-@tparam {string,...} mflags (Optional) Additional match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'partial', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any', 'all'.  'all' changes the
- behavior of matches from returning captures to returning all potential
- matches.
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+
+Note that a regex created using `all` will return an error.
 @treturn function An iterator function which, on each iteration,
- returns the same as regex:match would have for the next match in the
+ returns the same as `regex:match` would have for the next match in the
  string.
 */
 static int regex_gmatch(lua_State *L)
@@ -5708,13 +5976,97 @@ static int regex_gmatch(lua_State *L)
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s);
+    int nret = regex_search(L, &matched, &partial, &mi, &s, "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
     {
 	alloc_udata(L, st, regex_iter_state);
 	lua_pushvalue(L, 1); /* save string reference */
-	lua_pushcclosure(L, regex_iter, 2);
+	lua_pushcclosure(L, regex_match_iter, 2);
+	if(nret)
+	    return 1;
+	st->partial = partial;
+	st->mi = mi;
+	st->s = s;
+	return 1;
+    }
+}
+
+static int regex_find_iter(lua_State *L)
+{
+    gboolean matched;
+    get_udata(L, lua_upvalueindex(1), st, regex_iter_state);
+    if(!st->mi) {
+	lua_pushnil(L);
+	return 1;
+    }
+    matched = g_match_info_matches(st->mi);
+    if(!matched) {
+	if(st->partial) {
+	    if(g_match_info_is_partial_match(st->mi))
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushnil(L);
+	}
+	g_match_info_free(st->mi);
+	st->mi = NULL;
+	return 1;
+    }
+    {
+	gint start, end;
+
+	g_match_info_fetch_pos(st->mi, 0, &start, &end);
+	lua_pushinteger(L, start + 1);
+	lua_pushinteger(L, end);
+    }
+    {
+	int nmatch = g_match_info_get_match_count(st->mi), i;
+	for(i = 1; i < nmatch; i++) {
+	    gint start, end;
+	    g_match_info_fetch_pos(st->mi, i, &start, &end);
+	    lua_pushlstring(L, st->s + start, end - start);
+	}
+	g_match_info_next(st->mi, NULL);
+	return nmatch + 1;
+    }
+}
+    
+/***
+Search for all matches in a string.
+@function regex:gfind
+@see string.gfind
+@see regex:find
+@tparam string s The string to search
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+
+Note that a regex created using `all` will return an error.
+@treturn function An iterator function which, on each iteration,
+ returns the same as `regex:find` would have for the next match in the
+ string.
+*/
+static int regex_gfind(lua_State *L)
+{
+    gboolean matched, partial;
+    GMatchInfo *mi;
+    const char *s;
+    int nret = regex_search(L, &matched, &partial, &mi, &s, "all mode not supported for gmatch");
+    if(nret > 1)
+	return nret;
+    {
+	alloc_udata(L, st, regex_iter_state);
+	lua_pushvalue(L, 1); /* save string reference */
+	lua_pushcclosure(L, regex_find_iter, 2);
 	if(nret)
 	    return 1;
 	st->partial = partial;
@@ -5728,11 +6080,20 @@ static int regex_gmatch(lua_State *L)
 Split a string with a regular expression separator.
 @function regex:split
 @tparam string s The string to split
-@tparam number start (Optional) The start position.
-@tparam {string,...} mflags (Optional) Additional match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any'
-@tparam number max (Optional) The maximum number of elements to return.  If
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+
+Note that a regex created using `all` or `partial` will return an error.
+@tparam[optchain] number max The maximum number of elements to return.  If
  unspecified or less than 1, all elements are returned.
 @treturn {string,...}  The elements separated by the regular expression.
  Each element is separated by any capture strings from the separator, if
@@ -5791,6 +6152,7 @@ typedef struct repl_state {
     lua_State *L;
     int tr, tn;
     int nmatch, nsub;
+    int laste;
 } repl_state;
 
 static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
@@ -5803,6 +6165,14 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
     gint start, end;
     const char *s = g_match_info_get_string(mi);
 
+    /* workaround for bug: .* matches twice on non-empty strings */
+    /* lrex_posix had similar bug, but worse: its $ matched twice as well */
+    /* same fix works for both: */
+    /* if an empty match follows a match with the same end pos, ignore empty */
+    g_match_info_fetch_pos(mi, 0, &start, &end);
+    if(start == end && end == rs->laste)
+	return FALSE;
+    rs->laste = end;
     ++rs->nmatch;
     switch(tr) {
       case LUA_TTABLE:
@@ -5906,31 +6276,40 @@ Replace occurrences of regular expression in string.
  capture substitution and case conversion.  If it is a table, the first
  capture (or entire match if there are no captures) is used as a key into
  the table; if the value is a string or number, it is the literal replacement
- text; otherwise, if the value is faluse or nil, no substitution is made.
+ text; otherwise, if the value is false or `nil`, no substitution is made.
  If it is a function, the function is called for every match, with all
  captures (or the entire match if there are no captures) as arguments;
  the return value is treated like the table entries.  For literal
- interpretation of a string, call regex\_escape\_string on it first.
+ interpretation of a string, call `regex_escape_string` on it first.
 @see regex_escape_string
-@tparam number start (Optional) The start position.
-@tparam number|function n (Optional) The maximum number of replacements, if
+@tparam[opt] number start The start position.
+@tparam[optchain] number|function n The maximum number of replacements, if
  specified as a number greater than 0.  If specified as a function, the
  function is called after determining the potential replacement text.  Its
  parameters are the full match start position, the full match end position,
- and the potential replacement text (or false/nil if no replacement is to be
+ and the potential replacement text (or false/`nil` if no replacement is to be
  made).  The function must return two values:  the first is the replacement
  operation:  true if normal replacement is to be made, false if no replacement
  is to be made, and a string if an alternate replacement is to be made.
- The second is the conintuation flag:  if absent, nil, or false, continue
+ The second is the conintuation flag:  if absent, `nil`, or false, continue
  replacement, and if true, continue globally without checking *n*, and if
  a number, continue that many iterations maximum without checking *n*.
-@tparam {string,...} mflags (Optional) Additional match flags:
- 'anchored', 'notbol', 'noteol', 'notempty', 'newline\_cr',
- 'newline\_lf', 'newline\_crlf', 'newline\_any'
-@treturn string|nil The substituted string, if successful; nil if not.
-@treturn number|string The number of matches, if successful; an error
- message if not.
-@treturn number The number of substitutions, if successful
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+
+Note that a regex created using `all` or `partial` will return an error.
+@treturn string The substituted string
+@treturn number The number of matches
+@treturn number The number of substitutions
+@raise Returns `nil` and error message string on error.
 */
 /* note: function interpretation of n parameter is stolen from lrexlib */
 /* note: nsub return value also stolen from lrexlib */
@@ -5941,15 +6320,19 @@ static int regex_gsub(lua_State *L)
     const char *s = luaL_checklstring(L, 2, &len);
     gchar *ret;
     repl_state rs;
+    int tr = lua_type(L, 3);
     int sp = lua_isnoneornil(L, 4) ? 0 : luaL_checkinteger(L, 4) - 1;
-    GRegexMatchFlags mfl;
+    int tn = lua_type(L, 5);
+    int nparm = lua_gettop(L);
+    GRegexMatchFlags mfl = 0;
     gboolean do_all, partial;
     get_udata(L, 1, st, regex_state);
 
     rs.L = L;
-    rs.tr = lua_type(L, 3);
-    rs.tn = lua_type(L, 5);
+    rs.tr = tr;
+    rs.tn = tn;
     rs.nmatch = rs.nsub = 0;
+    rs.laste = -1;
     if(rs.tr != LUA_TTABLE && rs.tr != LUA_TFUNCTION) {
 	g_regex_check_replacement(luaL_checkstring(L, 3), NULL, &err);
 	if(err) {
@@ -5963,7 +6346,7 @@ static int regex_gsub(lua_State *L)
     if(rs.tn != LUA_TFUNCTION && rs.tn != LUA_TNONE && rs.tn != LUA_TNIL)
 	luaL_checknumber(L, 5);
     do_all = st->do_all;
-    if(!get_mfl(L, 4, &mfl, &do_all))
+    if(nparm > 5 && !get_mfl(L, 6, &mfl, &do_all))
 	return 2;
     if(do_all) {
 	lua_pushnil(L);
@@ -6001,6 +6384,7 @@ static luaL_Reg regex_state_funcs[] = {
     { "find", regex_find },
     { "match", regex_match },
     { "gmatch", regex_gmatch },
+    { "gfind", regex_gfind },
     { "split", regex_split },
     { "gsub", regex_gsub },
     { "__gc", free_regex_state },
@@ -6012,17 +6396,19 @@ static luaL_Reg regex_state_funcs[] = {
 Simple XML Subset Parser.
 The following functions use varargs, and are not supported:
 
-g\_markup\_\*printf\_escaped: emulate using string concat and renaming of
+`g_markup_*printf_escaped()`: emulate using string concat and renaming of
  escaper to shorter name:
+
      e = glib.markup_escape_text
      output = '<purchase>' ..
               '<store>' .. e(store) .. '</store>' ..
               '<item>' .. e(item) .. '</item>' ..
               '</purchase>'
 
-g\_markup\_collect\_attributes: the only useful bit here that is for
+`g_markup_collect_attributes()`: the only useful bit here that is for
 some reason not exposed independently is the boolean parser.  Otherwise,
 it's best to emulate using lua:
+
     -- usage:
     attrs, msg = collect_attrs(attr_names, attr_vals,
                                {a='str', b='bool', c='?bool', ...})
@@ -6046,7 +6432,7 @@ it's best to emulate using lua:
         local isreq = req_parms[n]
         if not isreq then return nil, "unknown attribute " .. n end
         if isreq:sub(1, 1) == '?' then isreq = isreq:sub(2) end
-        if req_parms[n] == 'bool' then
+        if isreq == 'bool' then
           local f = bool_rx:match(v)
           if not f then return nil, "invalid boolean " .. n end
           attrs[n] = f == ''
@@ -6081,6 +6467,7 @@ static int glib_markup_escape_text(lua_State *L)
 
 typedef struct markup_parse_state {
     GMarkupParseContext *ctx;
+    GMarkupParser parser; /* can't allocate on stack; doesn't copy! */
     lua_State *L;
     struct markup_parse_state *next;
 } markup_parse_state;
@@ -6118,10 +6505,45 @@ Pass a function like this in the *start\_element* parameter for a parser.
  in order
 @tparam {string,...} attr_values The values of the attributes in this tag,
  in the same order as the names.
-@treturn nil|string Nothing or nil on success; an error message on error.
+@treturn[opt] {string=value,...}|nil  If present and a table, push the
+ parser context and use the returned parser instead.  The current parser
+ will resume upon reaching the associated end element.  See
+ `markup_parse_context_new` for details.
+
+   * **start\_element**: a function like `_gmarkup_start_element_`.
+   * **end\_element**: a function like `_gmarkup_end_element_`.
+   * **text**: a function like `_gmarkup_text_`.
+   * **passthrough**: a function like `_gmarkup_passthrough_`.
+   * **error**: a function like `_gmarkup_error_`.
+   * **pop**: a value to pass to the *end\_element* handler when finished.
+     It may be any value, but a function is probably most suitable.
+     There is no guarantee that this value will ever be used, since it
+     requires that no errors occur and that the *end\_element*
+     handler actually uses it.
+@raise Returns error message string on error.
 @see markup_parse_context_new
-@see markup_parse_context:push
+@see _gmarkup_end_element_
+@see _gmarkup_text_
+@see _gmarkup_passthrough_
+@see _gmarkup_error_
+@usage
+function counter()
+  local count = 0
+  return {
+    start_element = function() count = count + 1 end,
+    pop = function() return count end
+  }
+end
+gmp = markup_parse_context_new {
+   start_element = function(ctx, el, ...)
+     if el == 'count' return counter() end
+   end,
+   end_element = function(ctx, n, pop)
+     if pop then print(pop()) end
+   end
+}
 */
+static void gmp_push(lua_State *L, markup_parse_state *st);
 static void gmp_start_element(GMarkupParseContext *ctx,
 			      const gchar *element_name,
 			      const gchar **attr_names,
@@ -6134,6 +6556,7 @@ static void gmp_start_element(GMarkupParseContext *ctx,
     lua_State *L = st->L;
     lua_getuservalue(L, 1);
     lua_getfield(L, -1, "start_element");
+    lua_pushvalue(L, 1);
     lua_pushstring(L, element_name);
     for(nattr = 0; attr_names[nattr]; nattr++);
     lua_createtable(L, nattr, 0);
@@ -6144,8 +6567,10 @@ static void gmp_start_element(GMarkupParseContext *ctx,
 	lua_pushstring(L, attr_values[nattr]);
 	lua_rawseti(L, -2, nattr + 1);
     }
-    lua_call(L, 3, 1);
-    if(!lua_isnil(L, -1)) {
+    lua_call(L, 4, 1);
+    if(lua_istable(L, -1)) {
+	gmp_push(L, st);
+    } else if(!lua_isnil(L, -1)) {
 	const char *msg = lua_tostring(L, -1);
 	/* FIXME: maybe support error codes in the future... */
 	*error = g_error_new(G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT,
@@ -6160,12 +6585,11 @@ The function called when an ending tag of an element is seen.
 Pass a function like this in the *end\_element* parameter for a parser.
 @tparam markup_parse_context ctx The context in which this was called
 @tparam string name The name of the element being started
-@tparam any pop If the context was previously pushed, and this is called
+@tparam[opt] any pop If the context was previously pushed, and this is called
  for the terminating element of that context, this is the `pop` element
- which was passed in to `markup_parse_context:push`.
-@treturn nil|string Nothing or nil on success; an error message on error.
+ which was pushed along with the parser.
+@raise Returns error message string on error.
 @see markup_parse_context_new
-@see markup_parse_context:push
 */
 static void gmp_end_element(GMarkupParseContext *ctx,
 			    const gchar *element_name,
@@ -6182,13 +6606,14 @@ static void gmp_end_element(GMarkupParseContext *ctx,
 	lua_pop(L, 2);
 	return;
     }
+    lua_pushvalue(L, 1);
     lua_pushstring(L, element_name);
     if(did_pop) {
-	lua_pushvalue(L, -3);
-	lua_remove(L, -4);
-	lua_call(L, 2, 1);
+	lua_pushvalue(L, -4);
+	lua_remove(L, -5);
+	lua_call(L, 3, 1);
     } else
-	lua_call(L, 1, 1);
+	lua_call(L, 2, 1);
     if(!lua_isnil(L, -1)) {
 	const char *msg = lua_tostring(L, -1);
 	/* FIXME: maybe support error codes in the future... */
@@ -6204,9 +6629,8 @@ The function called when text within an element is seen.
 Pass a function like this in the *text* parameter for a parser.
 @tparam markup_parse_context ctx The context in which this was called
 @tparam string text The text.
-@treturn nil|string Nothing or nil on success; an error message on error.
+@raise Returns error message string on error.
 @see markup_parse_context_new
-@see markup_parse_context:push
 */
 static void gmp_text(GMarkupParseContext *ctx,
 		     const gchar *text,
@@ -6218,8 +6642,9 @@ static void gmp_text(GMarkupParseContext *ctx,
     lua_State *L = st->L;
     lua_getuservalue(L, 1);
     lua_getfield(L, -1, "text");
+    lua_pushvalue(L, 1);
     lua_pushlstring(L, text, text_len);
-    lua_call(L, 1, 1);
+    lua_call(L, 2, 1);
     if(!lua_isnil(L, -1)) {
 	const char *msg = lua_tostring(L, -1);
 	/* FIXME: maybe support error codes in the future... */
@@ -6237,9 +6662,8 @@ When copying XML, this text is intended to be output literally, assuming
 all other function calls output their tags immediately.
 @tparam markup_parse_context ctx The context in which this was called
 @tparam string text The text.
-@treturn nil|string Nothing or nil on success; an error message on error.
+@raise Returns error message string on error.
 @see markup_parse_context_new
-@see markup_parse_context:push
 */
 static void gmp_passthrough(GMarkupParseContext *ctx,
 			    const gchar *text,
@@ -6251,8 +6675,9 @@ static void gmp_passthrough(GMarkupParseContext *ctx,
     lua_State *L = st->L;
     lua_getuservalue(L, 1);
     lua_getfield(L, -1, "passthrough");
+    lua_pushvalue(L, 1);
     lua_pushlstring(L, text, text_len);
-    lua_call(L, 1, 1);
+    lua_call(L, 2, 1);
     if(!lua_isnil(L, -1)) {
 	const char *msg = lua_tostring(L, -1);
 	/* FIXME: maybe support error codes in the future... */
@@ -6269,7 +6694,6 @@ Pass a function like this in the *error* parameter for a parser.
 @tparam markup_parse_context ctx The context in which this was called
 @tparam string text The error text.
 @see markup_parse_context_new
-@see markup_parse_context:push
 */
 static void gmp_error(GMarkupParseContext *ctx,
 		      GError *error,
@@ -6284,8 +6708,9 @@ static void gmp_error(GMarkupParseContext *ctx,
 	lua_pop(L, 2);
 	return;
     }
+    lua_pushvalue(L, 1);
     lua_pushstring(L, error->message);
-    lua_call(L, 1, 0);
+    lua_call(L, 2, 0);
 }
 
 /***
@@ -6310,21 +6735,20 @@ Create GMarkup parser.
 */
 static int glib_markup_parse_context_new(lua_State *L)
 {
-    GMarkupParser parser;
     GMarkupParseFlags fl = 0;
 
     luaL_checktype(L, 1, LUA_TTABLE);
     {
 	alloc_udata(L, st, markup_parse_state);
-	memset(&parser, 0, sizeof(parser));
 	lua_newtable(L);
 #define getfun(n, p) do { \
     lua_getfield(L, p, #n); \
     if(!lua_isnil(L, -1)) { \
 	luaL_checktype(L, -1, LUA_TFUNCTION); \
-	parser.n = gmp_##n; \
+	st->parser.n = gmp_##n; \
 	lua_setfield(L, -2, #n); \
-    } \
+    } else \
+	lua_pop(L, 1); \
 } while(0)
 	getfun(start_element, 1);
 	getfun(end_element, 1);
@@ -6332,8 +6756,10 @@ static int glib_markup_parse_context_new(lua_State *L)
 	getfun(passthrough, 1);
 	getfun(error, 1);
 	/* to support push/pop, end_element and error always present */
-	parser.end_element = gmp_end_element;
-	parser.error = gmp_error;
+	if(st->parser.start_element) {
+	    st->parser.end_element = gmp_end_element;
+	    st->parser.error = gmp_error;
+	}
 	lua_setuservalue(L, -2);
 	lua_getfield(L, 1, "treat_cdata_as_text");
 	if(lua_toboolean(L, -1))
@@ -6342,7 +6768,8 @@ static int glib_markup_parse_context_new(lua_State *L)
 	if(lua_toboolean(L, -1))
 	    fl |= G_MARKUP_PREFIX_ERROR_POSITION;
 	lua_pop(L, 2);
-	st->ctx = g_markup_parse_context_new(&parser, fl, L, NULL);
+	st->ctx = g_markup_parse_context_new(&st->parser, fl, st, NULL);
+	st->L = L;
 	return 1;
     }
 }
@@ -6355,8 +6782,8 @@ static int glib_markup_parse_context_new(lua_State *L)
 Finish parsing.
 @function markup_parse_context:end_parse
 Call this after all data has been passed to the parser to finish parsing.
-@treturn boolean True if successful.
-@treturn string Error message if unsuccessful.
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int markup_end_parse(lua_State *L)
 {
@@ -6427,8 +6854,8 @@ Parse some text.
 Call this with chunks of text, in order, as often as needed to process
 entire text.
 @tparam string s The next chunk of text to process
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int markup_parse(lua_State *L)
 {
@@ -6445,61 +6872,34 @@ static int markup_parse(lua_State *L)
     return 1;
 }
 
-/***
-Push the parse context.
-@function markup_parse_context:push
-This may only be called from *start\_element* handler. It creates a new
-parser just for the text from the started element to its end tag.  When
-the end tag is found, the previous parser is restored, and the
-*end\_element* handler receives one additional argument:  the *pop* parameter
-to this function.
-@tparam {string=value,...} options Context creation options:
-
-   * **start\_element**: a function like `_gmarkup_start_element_`.
-   * **end\_element**: a function like `_gmarkup_end_element_`.
-   * **text**: a function like `_gmarkup_text_`.
-   * **passthrough**: a function like `_gmarkup_passthrough_`.
-   * **error**: a function like `_gmarkup_error_`.
-   * **pop**: a value to pass to the parent's *end\_element* handler when finished.
-     It may be any value, but a function is probably most suitable.
-     There is no guarantee that this value will ever be used, since it
-     requires that no errors occur and that the parent's *end\_element*
-     handler actually uses it.
-@see _gmarkup_start_element_
-@see _gmarkup_end_element_
-@see _gmarkup_text_
-@see _gmarkup_passthrough_
-@see _gmarkup_error_
-*/
-static int markup_push(lua_State *L)
+void gmp_push(lua_State *L, markup_parse_state *st)
 {
-    GMarkupParser parser;
     markup_parse_state *p;
-    get_udata(L, 1, st, markup_parse_state);
 
-    luaL_checktype(L, 2, LUA_TTABLE);
-    memset(&parser, 0, sizeof(parser));
+    for(p = st; p->next; p = p->next);
+    p->next = g_malloc(sizeof(*p));
+    p = p->next;
+    memset(p, 0, sizeof(*p));
+    p->L = st->L;
+    p->ctx = st->ctx;
+    st = p;
     lua_newtable(L);
-    getfun(start_element, 2);
-    getfun(end_element, 2);
-    getfun(text, 2);
-    getfun(passthrough, 2);
-    getfun(error, 2);
+    getfun(start_element, -2);
+    getfun(end_element, -2);
+    getfun(text, -2);
+    getfun(passthrough, -2);
+    getfun(error, -2);
     /* to support push/pop, end_element and error always present */
-    parser.end_element = gmp_end_element;
-    parser.error = gmp_error;
-    lua_getfield(L, 2, "pop");
+    if(st->parser.start_element) {
+	st->parser.end_element = gmp_end_element;
+	st->parser.error = gmp_error;
+    }
+    lua_getfield(L, -2, "pop");
     lua_setfield(L, -2, "pop");
     lua_getuservalue(L, 1);
     lua_setfield(L, -2, "next");
     lua_setuservalue(L, 1);
-    for(p = st; p->next; p = p->next);
-    p->next = g_malloc(sizeof(*p));
-    p = p->next;
-    memcpy(p, st, sizeof(*p));
-    p->next = NULL;
-    g_markup_parse_context_push(st->ctx, &parser, p);
-    return 0;
+    g_markup_parse_context_push(st->ctx, &st->parser, st);
 }
 
 static int free_markup_parse_state(lua_State *L)
@@ -6522,9 +6922,8 @@ static luaL_Reg markup_parse_state_funcs[] = {
     {"end_parse", markup_end_parse},
     {"get_position", markup_get_position},
     {"get_element", markup_get_element},
-    {"get_element_statck", markup_get_element_stack},
+    {"get_element_stack", markup_get_element_stack},
     {"parse", markup_parse},
-    {"push", markup_push},
     {"__gc", free_markup_parse_state},
     {NULL, NULL}
 };
@@ -6582,17 +6981,17 @@ static int key_file_set_list_separator(lua_State *L)
 Load a file.
 @function key_file:load_from_file
 @tparam string f File name
-@tparam boolean|{string,...} dirs (Optional) If true, search relative to
+@tparam[opt] boolean|{string,...} dirs If true, search relative to
  standard configuration file directories.  If a table, search realtive to
  all directories in the table.  Otherwise, the file name is absolute or
  relative to the current directory.
-@tparam boolean keep_com (Optional) If true, keep comments so they are
+@tparam[optchain] boolean keep_com If true, keep comments so they are
  written by `key_file:to_data`.
-@tparam boolean keep_trans (Optional) If true, keep all translations so they
+@tparam[optchain] boolean keep_trans If true, keep all translations so they
  are written by `key_file:to_data`.
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful, or the actual file name if
- a directory search was done.
+@treturn boolean True
+@treturn string The actual file name if a directory search was done.
+@raise Returns false and error message string on error.
 */
 static int key_file_load_from_file(lua_State *L)
 {
@@ -6646,12 +7045,12 @@ static int key_file_load_from_file(lua_State *L)
 Load data.
 @function key_file:load_from_data
 @tparam string s The data
-@tparam boolean keep_com (Optional) If true, keep comments so they are
+@tparam[opt] boolean keep_com If true, keep comments so they are
  written by `key_file:to_data`.
-@tparam boolean keep_trans (Optional) If true, keep all translations so they
+@tparam[optchain] boolean keep_trans If true, keep all translations so they
  are written by `key_file:to_data`.
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int key_file_load_from_data(lua_State *L)
 {
@@ -6677,8 +7076,8 @@ static int key_file_load_from_data(lua_State *L)
 /***
 Convert entire key file to a string.
 @function key_file:to_data
-@treturn string|nil The key file contents, if successful
-@treturn string An error message if unsuccessful
+@treturn string The key file contents
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_to_data(lua_State *L)
 {
@@ -6737,9 +7136,9 @@ static int key_file_get_groups(lua_State *L)
 Get the names of all keys in a group.
 @function key_file:get_keys
 @tparam string group The name of a group to query
-@treturn {string,...}|nil A table containing the names of all keys in the
- *group*, or nil if unsuccessful
-@treturn string An error message if unsuccessful
+@treturn {string,...} A table containing the names of all keys in the
+ *group
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_keys(lua_State *L)
 {
@@ -6784,7 +7183,7 @@ Check if key exists.
 @tparam string group The group name
 @tparam string key The key name
 @treturn boolean True if key exists in key file.
-@treturn string An error message if an error occurred
+@raise Returns false and error message string on error.
 */
 /* glib manual says "use ...get_value() to test", but ...get_value() does
    an unnecessary malloc, so that seems pointless. */
@@ -6807,8 +7206,8 @@ Obtain raw value of a key.
 @function key_file:raw_get
 @tparam string group The group name
 @tparam string key The key name
-@treturn string|nil The value, or nil on error
-@treturn string An error message on error
+@treturn string The value
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_raw_get(lua_State *L)
 {
@@ -6833,10 +7232,10 @@ Obtain value of a key.
 @function key_file:get
 @tparam string group The group name
 @tparam string key The key
-@tparam string locale (Optional) If specified, get value translated into this
+@tparam[opt] string locale If specified, get value translated into this
  locale, if available
-@treturn string|nil The parsed UTF-8 value, or nil on error
-@treturn string An error message on error
+@treturn string The parsed UTF-8 value
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get(lua_State *L)
 {
@@ -6862,8 +7261,8 @@ Obtain value of a boolean key.
 @function key_file:get_boolean
 @tparam string group The group name
 @tparam string key The key
-@treturn boolean The value, or false on error
-@treturn string An error message on error
+@treturn boolean The value
+@raise Returns false and error message string on error.
 */
 static int key_file_get_boolean(lua_State *L)
 {
@@ -6886,8 +7285,8 @@ Obtain value of a numeric key.
 @function key_file:get_number
 @tparam string group The group name
 @tparam string key The key
-@treturn number|nil The value, or nil on error
-@treturn string An error message on error
+@treturn number The value
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_number(lua_State *L)
 {
@@ -6908,13 +7307,17 @@ static int key_file_get_number(lua_State *L)
 
 /***
 Obtain value of a string list key.
-@function: key_file:get_list
+Note that while `key_file:set_list` escapes characters such as separators,
+this function does not handle such escapes correctly.  It would be better
+to just use `key_file:raw_get` and parse the list out manually if escaped
+characters might be present.
+@function key_file:get_list
 @tparam string group The group name
 @tparam string key The key
-@tparam string locale (Optional) If specified, get value translated into this
+@tparam[opt] string locale If specified, get value translated into this
  locale, if available
-@treturn {string,...}|nil The list of parsed UTF-8 values, or nil on error.
-@treturn string An error message on error.
+@treturn {string,...} The list of parsed UTF-8 values
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_list(lua_State *L)
 {
@@ -6944,11 +7347,11 @@ static int key_file_get_list(lua_State *L)
 
 /***
 Obtain value of a boolean list key.
-@function: key_file:get_boolean_list
+@function key_file:get_boolean_list
 @tparam string group The group name
 @tparam string key The key
-@treturn {boolean,...}|nil The list of values, or nil on error.
-@treturn string An error message on error.
+@treturn {boolean,...} The list of values
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_boolean_list(lua_State *L)
 {
@@ -6976,11 +7379,11 @@ static int key_file_get_boolean_list(lua_State *L)
 
 /***
 Obtain value of a number list key.
-@function: key_file:get_boolean_list
+@function key_file:get_number_list
 @tparam string group The group name
 @tparam string key The key
-@treturn {number,...}|nil The list of values, or nil on error.
-@treturn string An error message on error.
+@treturn {number,...} The list of values
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_number_list(lua_State *L)
 {
@@ -7009,12 +7412,12 @@ static int key_file_get_number_list(lua_State *L)
 /***
 Obtain comment above a key or group.
 @function key_file:get_comment
-@tparam string group (Optional) The group name; if unspecified, the first
+@tparam[opt] string group The group name; if unspecified, the first
  group is used, and *key* is ignored.
-@tparam string key (Optional) The key name; if specified, obtain comment
+@tparam[optchain] string key The key name; if specified, obtain comment
  above the key; otherwise, obtain comment above group
-@treturn string|nil The comment string, or nil on error
-@treturn string An error message on error
+@treturn string| The comment string
+@raise Returns `nil` and error message string on error.
 */
 static int key_file_get_comment(lua_State *L)
 {
@@ -7056,7 +7459,7 @@ Set value of a key.
 @tparam string group The group name
 @tparam string key The key
 @tparam string value The value
-@tparam string|boolean locale (Optional) If a string, set value translated
+@tparam[opt] string|boolean locale If a string, set value translated
  into this locale.  Otherwise, if true, set value translated into current
  locale.
 */
@@ -7107,11 +7510,11 @@ static int key_file_set_number(lua_State *L)
 
 /***
 Set value of a string list key.
-@function: key_file:set_list
+@function key_file:set_list
 @tparam string group The group name
 @tparam string key The key
 @tparam {string,...} value The value
-@tparam string|boolean locale (Optional) If a string, set value translated
+@tparam[opt] string|boolean locale If a string, set value translated
  into this locale.  Otherwise, if true, set value translated into current
  locale.
 */
@@ -7144,7 +7547,7 @@ static int key_file_set_list(lua_State *L)
 
 /***
 Set value of a boolean list key.
-@function: key_file:set_boolean_list
+@function key_file:set_boolean_list
 @tparam string group The group name
 @tparam string key The key
 @tparam {boolean,...} value The value
@@ -7172,7 +7575,7 @@ static int key_file_set_boolean_list(lua_State *L)
 
 /***
 Set value of a number list key.
-@function: key_file:set_boolean_list
+@function key_file:set_number_list
 @tparam string group The group name
 @tparam string key The key
 */
@@ -7201,12 +7604,12 @@ static int key_file_set_number_list(lua_State *L)
 Set comment above a key or group.
 @function key_file:set_comment
 @tparam string comment The comment
-@tparam string group (Optional) The group name; if unspecified, the first
+@tparam[opt] string group The group name; if unspecified, the first
  group is used, and *key* is ignored.
-@tparam string key (Optional) The key name; if specified, obtain comment
+@tparam[optchain] string key The key name; if specified, obtain comment
  above the key; otherwise, obtain comment above group
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int key_file_set_comment(lua_State *L)
 {
@@ -7228,10 +7631,10 @@ static int key_file_set_comment(lua_State *L)
 Remove a group or key.
 @function key_file:remove
 @tparam string group The group
-@tparam string key (Optional) The key.  If specified, remove that key.
+@tparam[opt] string key The key.  If specified, remove that key.
  Otherwise, remove the group *group*.
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int key_file_remove(lua_State *L)
 {
@@ -7254,12 +7657,12 @@ static int key_file_remove(lua_State *L)
 /***
 Remove comment above a key or group.
 @function key_file:remove_comment
-@tparam string group (Optional) The group name; if unspecified, the first
+@tparam[opt] string group The group name; if unspecified, the first
  group is used, and *key* is ignored.
-@tparam string key (Optional) The key name; if specified, obtain comment
+@tparam[optchain] string key The key name; if specified, obtain comment
  above the key; otherwise, obtain comment above group
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int key_file_remove_comment(lua_State *L)
 {
@@ -7349,11 +7752,11 @@ static int free_bookmark_file_state(lua_State *L)
 Load a file.
 @function bookmark_file:load_from_file
 @tparam string f File name
-@tparam boolean use_dirs (Optional) If true, search relative to
+@tparam[opt] boolean use_dirs If true, search relative to
  standard configuration file directories.
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful, or the actual file name if
- a directory search was done.
+@treturn boolean True
+@treturn string The actual file name if a directory search was done.
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_load_from_file(lua_State *L)
 {
@@ -7385,8 +7788,8 @@ static int bookmark_file_load_from_file(lua_State *L)
 Load data.
 @function bookmark_file:load_from_data
 @tparam string s The data
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_load_from_data(lua_State *L)
 {
@@ -7407,8 +7810,8 @@ static int bookmark_file_load_from_data(lua_State *L)
 /***
 Convert bookmark file to a string.
 @function bookmark_file:to_data
-@treturn string|nil The bookmark file contents, if successful
-@treturn string An error message if unsuccessful
+@treturn string The bookmark file contents
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_to_data(lua_State *L)
 {
@@ -7431,8 +7834,8 @@ static int bookmark_file_to_data(lua_State *L)
 Write bookmark file to a file.
 @function bookmark_file:to_file
 @tparam string f The file name
-@treturn boolean True if successful
-@treturn string An error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_to_file(lua_State *L)
 {
@@ -7466,7 +7869,7 @@ Check if bookmark file has given URI in a given group.
 @tparam string uri The URI to find
 @tparam string group The group to find
 @treturn boolean True if present in group
-@treturn string Error message if error
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_has_group(lua_State *L)
 {
@@ -7545,8 +7948,8 @@ static int bookmark_file_uris(lua_State *L)
 Get title for URI
 @function bookmark_file:title
 @tparam string uri The URI
-@treturn string|nil Its title if successful
-@treturn string Error message if unsuccessful
+@treturn string Its title 
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_title(lua_State *L)
 {
@@ -7568,8 +7971,8 @@ static int bookmark_file_title(lua_State *L)
 Get description for URI
 @function bookmark_file:description
 @tparam string uri The URI
-@treturn string|nil Its description if successful
-@treturn string Error message if unsuccessful
+@treturn string Its description
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_description(lua_State *L)
 {
@@ -7591,8 +7994,8 @@ static int bookmark_file_description(lua_State *L)
 Get MIME type for URI
 @function bookmark_file:mime_type
 @tparam string uri The URI
-@treturn string|nil Its MIME type if successful
-@treturn string Error message if unsuccessful
+@treturn string Its MIME type
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_mime_type(lua_State *L)
 {
@@ -7615,7 +8018,7 @@ Get private flag for URI
 @function bookmark_file:is_private
 @tparam string uri The URI
 @treturn boolean True if private flag set
-@treturn string Error message on error
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_is_private(lua_State *L)
 {
@@ -7636,9 +8039,9 @@ static int bookmark_file_is_private(lua_State *L)
 Get icon for URI.
 @function bookmark_file:icon
 @tparam string uri The URI
-@treturn string|nil The icon URL if successful
-@treturn string The icon's MIME type if successful, or an error message if
- unsuccessful.
+@treturn string The icon URL
+@treturn string The icon's MIME type
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_icon(lua_State *L)
 {
@@ -7663,8 +8066,8 @@ static int bookmark_file_icon(lua_State *L)
 Get time URI was added.
 @function bookmark_file:added
 @tparam string uri The URI
-@treturn number|nil The time stamp, as seconds from epoch, if successful.
-@treturn string An error message if unsuccessful.
+@treturn number The time stamp, as seconds from epoch
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_added(lua_State *L)
 {
@@ -7686,8 +8089,8 @@ static int bookmark_file_added(lua_State *L)
 Get time URI was last modified.
 @function bookmark_file:modified
 @tparam string uri The URI
-@treturn number|nil The time stamp, as seconds from epoch, if successful.
-@treturn string An error message if unsuccessful.
+@treturn number The time stamp, as seconds from epoch
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_modified(lua_State *L)
 {
@@ -7709,8 +8112,8 @@ static int bookmark_file_modified(lua_State *L)
 Get time URI was last visited.
 @function bookmark_file:visited
 @tparam string uri The URI
-@treturn number|nil The time stamp, as seconds from epoch, if successful.
-@treturn string An error message if unsuccessful.
+@treturn number The time stamp, as seconds from epoch
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_visited(lua_State *L)
 {
@@ -7732,8 +8135,8 @@ static int bookmark_file_visited(lua_State *L)
 Get list of groups to which URI belongs.
 @function bookmark_file:groups
 @tparam string uri The URI
-@treturn {string,...}|nil The list of groups, if successful
-@treturn string An error message, if unsuccessful
+@treturn {string,...} The list of groups
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_groups(lua_State *L)
 {
@@ -7762,8 +8165,8 @@ static int bookmark_file_groups(lua_State *L)
 Get list of applications which registered this URI.
 @function bookmark_file:applications
 @tparam string uri The URI
-@treturn {string,...}|nil The list of applications, if successful
-@treturn string An error message, if unsuccessful
+@treturn {string,...} The list of applications
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_applications(lua_State *L)
 {
@@ -7794,11 +8197,10 @@ Obtain registration information for application which registered URI.
 @function boomark_file:app_info
 @tparam string uri The URI
 @tparam string app Application name
-@treturn string|nil The command to invoke *app* on *uri* (or nil on error)
-@treturn number|string The number of times *app* registered *uri* (or
- error message on error)
-@treturn number|nil The last time *app* registered *uri* (or not present on
- error)
+@treturn string The command to invoke *app* on *uri*
+@treturn number The number of times *app* registered *uri*
+@treturn number The last time *app* registered *uri*
+@raise Returns `nil` and error message string on error.
 */
 static int bookmark_file_app_info(lua_State *L)
 {
@@ -7826,7 +8228,7 @@ static int bookmark_file_app_info(lua_State *L)
 /***
 Set title for URI
 @function bookmark_file:set_title
-@tparam string uri (Optional) The URI.  If nil, the title of the bookmark
+@tparam[opt] string uri The URI.  If `nil`, the title of the bookmark
  file is set.
 @tparam string title The new title
 */
@@ -7841,7 +8243,7 @@ static int bookmark_file_set_title(lua_State *L)
 /***
 Set description for URI
 @function bookmark_file:set_description
-@tparam string uri (Optional) The URI.  If nil, the title of the bookmark
+@tparam[opt] string uri The URI.  If `nil`, the title of the bookmark
  file is set.
 @tparam string desc The new description
 */
@@ -7966,16 +8368,16 @@ static int bookmark_file_set_groups(lua_State *L)
 
 /***
 Set registration information for application which registered URI.
-@function boomark_file:set_app_info
+@function bookmark_file:set_app_info
 @tparam string uri The URI
 @tparam string app Application name
 @tparam string exec The command to invoke *app* on *uri* (%f == file, %u == uri)
-@tparam number rcount (Optional) The number of times *app* registered *uri*
- (absent, nil, or less than 0 to simply increment, or 0 to remove)
-@tparam number stamp (Optional) The last time *app* registered *uri*
- (or -1, nil, or absent for current time)
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@tparam[opt] number rcount The number of times *app* registered *uri*
+ (absent, `nil`, or less than 0 to simply increment, or 0 to remove)
+@tparam[optchain] number stamp The last time *app* registered *uri*
+ (or -1, `nil`, or absent for current time)
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_set_app_info(lua_State *L)
 {
@@ -8031,8 +8433,8 @@ Remove a group from the list of groups URI belongs to.
 @function bookmark_file:remove_group
 @tparam string uri The URI
 @tparam string group The group
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_remove_group(lua_State *L)
 {
@@ -8054,8 +8456,8 @@ Remove an application from the list of applications that registered this URI.
 @function bookmark_file:remove_application
 @tparam string uri The URI
 @tparam string app The application name
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_remove_application(lua_State *L)
 {
@@ -8076,8 +8478,8 @@ static int bookmark_file_remove_application(lua_State *L)
 Remove URI.
 @function bookmark_file:remove
 @tparam string uri The URI
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_remove(lua_State *L)
 {
@@ -8098,8 +8500,8 @@ Change URI, retaining group and application information.
 @function bookmark_file:move
 @tparam string uri The URI
 @tparam string new The new URI
-@treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@treturn boolean True
+@raise Returns false and error message string on error.
 */
 static int bookmark_file_move(lua_State *L)
 {
