@@ -1,0 +1,6 @@
+This is yet another Lua glib binding.  See the top of lua-glib.c for
+overview, and generate the HTML documentation for complete
+documentation.  The build is done using Odin, available as a separate
+project.  Or you can just read the overview and Odinfile and figure it
+out for yourself.
+
