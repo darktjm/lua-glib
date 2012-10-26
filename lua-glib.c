@@ -104,6 +104,8 @@ linking with shared libraries.
 Note that since LDoc does not support error return sections, I have used
 exception sections (@raise) instead.
 
+Questions/comments to darktjm@gmail.com.
+
 @module glib
 @author Thomas J. Moore
 @copyright 2012
