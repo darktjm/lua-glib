@@ -607,6 +607,16 @@ if head('Perl-compatible Regular Expressions') then
       ms = 'abcBacCabCbaBaCba'
       print(rx:find(ms))
       print(rx:find(ms, 1, {'all'}))
+      s, e, m = rx:tfind(ms)
+      print(s, e)
+      if s then
+	for i, v in ipairs(m) do print(i, v) end
+      end
+      s, e, m = rx:tfind(ms, 1, {'all'})
+      print(s, e)
+      if(s) then
+	for i, v in ipairs(m) do print(i, v) end
+      end
       print(rx:match(ms))
       print(rx:match(ms, 1, {'all'}))
       for a, b, c, d, e, f, g, h, i, j in rx:gmatch(ms) do
@@ -632,6 +642,12 @@ if head('Perl-compatible Regular Expressions') then
 	elseif c then print(a, b, c)
 	elseif b then print(a, b)
 	else print(a) end
+      end
+      for s, e, m in rx:gtfind(ms) do
+	print(s, e)
+	if s then
+	  for i, v in ipairs(m) do print(i, v) end
+	end
       end
     end
     function n(s, e, r)

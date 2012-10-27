@@ -5764,7 +5764,8 @@ static int regex_get_match_flags(lua_State *L)
 }
 
 static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
-			GMatchInfo **mi, const char **s, const char *no_all)
+			gboolean *do_all_ret, GMatchInfo **mi, const char **s,
+			const char *no_all)
 {
     GError *err = NULL;
     size_t len;
@@ -5810,6 +5811,8 @@ static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
 	lua_pushnil(L);
 	return 1;
     }
+    if(do_all_ret)
+	*do_all_ret = do_all;
     return 0;
 }
 
@@ -5842,7 +5845,8 @@ Search for a match in a string.
 @treturn number The location of the last character of the first
  match
 @treturn string,... On a successful match, all captures are returned as
- well
+ well.  For `all` mode, these are actually all possible matches except the
+ maximal match, which is described by the first two return values.
 @raise Returns `nil` and error message string on error.
 */
 static int regex_find(lua_State *L)
@@ -5850,7 +5854,7 @@ static int regex_find(lua_State *L)
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s, NULL);
+    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s, NULL);
     if(nret)
 	return nret;
     if(partial && !matched) {
@@ -5873,6 +5877,74 @@ static int regex_find(lua_State *L)
 	}
 	g_match_info_free(mi);
 	return nmatch + 1;
+    }
+}
+
+/* concept of tfind taken from lrexlib */
+/***
+Search for a match in a string.
+@function regex:tfind
+@see string.find
+@tparam string s The string to search
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching; incompatible with `all`
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+  * `all` -- changes the behavior of matches from returning captures to
+    returning all potential matches.  That is, any variable-length matching
+    operator will attempt to match at every possible length, rather than the
+    most/least greedy depending on the ungreedy option an the ? greediness
+    operator.  This is incompatible with captures and partial matching.
+@treturn number|nil|boolean The location of the start of the first match, or
+ `nil` if there are no matches, or false if there is only a partial match,
+ in which case no further results are returned (the location of the match
+ cannot be determined, and there are no captures).
+@treturn number The location of the last character of the first
+ match
+@treturn {string,...} On a successful match, all captures are returned as
+ well.  If there are no captures, an empty table is returned.  For `all`
+ mode, these are actually all possible matches except the maximal match,
+ which is described by the first two return values.
+@raise Returns `nil` and error message string on error.
+*/
+static int regex_tfind(lua_State *L)
+{
+    gboolean matched, partial;
+    GMatchInfo *mi;
+    const char *s;
+    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s, NULL);
+    if(nret)
+	return nret;
+    if(partial && !matched) {
+	lua_pushboolean(L, 0);
+	return 1;
+    }
+    {
+	gint start, end;
+
+	g_match_info_fetch_pos(mi, 0, &start, &end);
+	lua_pushinteger(L, start + 1);
+	lua_pushinteger(L, end);
+    }
+    {
+	int nmatch = g_match_info_get_match_count(mi), i;
+	lua_createtable(L, nmatch - 1, 0);
+	for(i = 1; i < nmatch; i++) {
+	    gint start, end;
+	    g_match_info_fetch_pos(mi, i, &start, &end);
+	    lua_pushlstring(L, s + start, end - start);
+	    lua_rawseti(L, -2, i);
+	}
+	g_match_info_free(mi);
+	return 3;
     }
 }
 
@@ -5902,7 +5974,8 @@ Search for a match in a string.
  are no captures, or `nil` if there are no matches, or false if there is only
  a partial match (in which case there are no captures).
 @treturn string,... On a successful match, all remaining captures are
- returned as well
+ returned as well.  For `all` mode, which has no captures, these are all
+ possible matches but the maximal match, which is the first returned string.
 @raise Returns `nil` and error message string on error.
 */
 static int regex_match(lua_State *L)
@@ -5910,7 +5983,8 @@ static int regex_match(lua_State *L)
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s, NULL);
+    gboolean do_all;
+    int nret = regex_search(L, &matched, &partial, &do_all, &mi, &s, NULL);
     if(nret)
 	return nret;
     if(partial && !matched) {
@@ -5920,13 +5994,13 @@ static int regex_match(lua_State *L)
     {
 	int nmatch = g_match_info_get_match_count(mi), i;
 	if(nmatch > 1) {
-	    for(i = 1; i < nmatch; i++) {
+	    for(i = do_all ? 0 : 1; i < nmatch; i++) {
 		gint start, end;
 		g_match_info_fetch_pos(mi, i, &start, &end);
 		lua_pushlstring(L, s + start, end - start);
 	    }
 	    g_match_info_free(mi);
-	    return nmatch - 1;
+	    return nmatch - (do_all ? 0 : 1);
 	} else {
 	    gint start, end;
 
@@ -6024,7 +6098,8 @@ static int regex_gmatch(lua_State *L)
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s, "all mode not supported for gmatch");
+    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+			    "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
     {
@@ -6108,13 +6183,101 @@ static int regex_gfind(lua_State *L)
     gboolean matched, partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, &mi, &s, "all mode not supported for gmatch");
+    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+			    "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
     {
 	alloc_udata(L, st, regex_iter_state);
 	lua_pushvalue(L, 1); /* save string reference */
 	lua_pushcclosure(L, regex_find_iter, 2);
+	if(nret)
+	    return 1;
+	st->partial = partial;
+	st->mi = mi;
+	st->s = s;
+	return 1;
+    }
+}
+
+static int regex_tfind_iter(lua_State *L)
+{
+    gboolean matched;
+    get_udata(L, lua_upvalueindex(1), st, regex_iter_state);
+    if(!st->mi) {
+	lua_pushnil(L);
+	return 1;
+    }
+    matched = g_match_info_matches(st->mi);
+    if(!matched) {
+	if(st->partial) {
+	    if(g_match_info_is_partial_match(st->mi))
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushnil(L);
+	} else
+	    lua_pushnil(L);
+	g_match_info_free(st->mi);
+	st->mi = NULL;
+	return 1;
+    }
+    {
+	gint start, end;
+
+	g_match_info_fetch_pos(st->mi, 0, &start, &end);
+	lua_pushinteger(L, start + 1);
+	lua_pushinteger(L, end);
+    }
+    {
+	int nmatch = g_match_info_get_match_count(st->mi), i;
+	lua_createtable(L, nmatch - 1, 0);
+	for(i = 1; i < nmatch; i++) {
+	    gint start, end;
+	    g_match_info_fetch_pos(st->mi, i, &start, &end);
+	    lua_pushlstring(L, st->s + start, end - start);
+	    lua_rawseti(L, -2, i);
+	}
+	g_match_info_next(st->mi, NULL);
+	return 3;
+    }
+}
+    
+/***
+Search for all matches in a string.
+@function regex:gtfind
+@see regex:tfind
+@tparam string s The string to search
+@tparam[opt] number start The start position.
+@tparam[optchain] {string,...} mflags Additional match flags:
+
+  * `anchored` -- pattern must match at start of string
+  * `notbol` -- ^ does not match the start of string (but \\A does)
+  * `noteol` -- $ does not match the end of string (but \\Z does)
+  * `notempty` -- the match length must be greater than zero
+  * `partial` -- use partial (incremental) matching
+  * `newline_cr` -- Newlines for $, ^, and . are \\r.
+  * `newline_lf` -- Newlines for $, ^, and . are \\n.
+  * `newline_crlf` -- Newlines for $, ^, and . are \\r\\n.
+  * `newline_any` -- Newlines for $, ^, and . are any.
+
+Note that a regex created using `all` will return an error.
+@treturn function An iterator function which, on each iteration,
+ returns the same as `regex:tfind` would have for the next match in the
+ string.
+*/
+static int regex_gtfind(lua_State *L)
+{
+    gboolean matched, partial;
+    GMatchInfo *mi;
+    const char *s;
+    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+			    "all mode not supported for gmatch");
+    if(nret > 1)
+	return nret;
+    {
+	alloc_udata(L, st, regex_iter_state);
+	lua_pushvalue(L, 1); /* save string reference */
+	lua_pushcclosure(L, regex_tfind_iter, 2);
 	if(nret)
 	    return 1;
 	st->partial = partial;
@@ -6430,9 +6593,11 @@ static luaL_Reg regex_state_funcs[] = {
     { "get_compile_flags", regex_get_compile_flags },
     { "get_match_flags", regex_get_match_flags },
     { "find", regex_find },
+    { "tfind", regex_tfind },
     { "match", regex_match },
     { "gmatch", regex_gmatch },
     { "gfind", regex_gfind },
+    { "gtfind", regex_gtfind },
     { "split", regex_split },
     { "gsub", regex_gsub },
     { "__gc", free_regex_state },
