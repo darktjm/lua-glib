@@ -5457,6 +5457,7 @@ Perl-compatible Regular Expressions
 typedef struct regex_state {
     GRegex *rex;
     gboolean do_all;
+    int ncap;
 } regex_state;
 
 typedef struct rex_flag {
@@ -5626,6 +5627,7 @@ static int glib_regex_new(lua_State *L)
 	g_error_free(err);
 	return 2;
     }
+    st->ncap = g_regex_get_capture_count(st->rex);
     return 1;
 }
 
@@ -5692,7 +5694,7 @@ Get the number of capturing subpatterns in the pattern.
 static int regex_get_capture_count(lua_State *L)
 {
     get_udata(L, 1, st, regex_state);
-    lua_pushnumber(L, g_regex_get_capture_count(st->rex));
+    lua_pushnumber(L, st->ncap);
     return 1;
 }
 
@@ -5763,7 +5765,7 @@ static int regex_get_match_flags(lua_State *L)
     return 1;
 }
 
-static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
+static int regex_search(lua_State *L, int *nmatched, gboolean *partial,
 			gboolean *do_all_ret, GMatchInfo **mi, const char **s,
 			const char *no_all)
 {
@@ -5791,26 +5793,27 @@ static int regex_search(lua_State *L, gboolean *matched, gboolean *partial,
 	return 2;
     }
     if(do_all)
-	*matched = g_regex_match_all_full(st->rex, *s, len, sp, mfl, mi, &err);
+	*nmatched = g_regex_match_all_full(st->rex, *s, len, sp, mfl, mi, &err);
     else
-	*matched = g_regex_match_full(st->rex, *s, len, sp, mfl, mi, &err);
+	*nmatched = g_regex_match_full(st->rex, *s, len, sp, mfl, mi, &err);
     if(err) {
 	lua_pushnil(L);
 	lua_pushstring(L, err->message);
 	g_error_free(err);
 	return 2;
     }
-    if(!*matched && *partial) {
+    if(!*nmatched && *partial) {
 	if(!g_match_info_is_partial_match(*mi)) {
 	    g_match_info_free(*mi);
 	    lua_pushnil(L);
 	    return 1;
 	}
-    } else if(!*matched) {
+    } else if(!*nmatched) {
 	g_match_info_free(*mi);
 	lua_pushnil(L);
 	return 1;
     }
+    *nmatched = do_all ? g_match_info_get_match_count(*mi) : st->ncap + 1;
     if(do_all_ret)
 	*do_all_ret = do_all;
     return 0;
@@ -5844,20 +5847,23 @@ Search for a match in a string.
  cannot be determined, and there are no captures).
 @treturn number The location of the last character of the first
  match
-@treturn string,... On a successful match, all captures are returned as
- well.  For `all` mode, these are actually all possible matches except the
+@treturn string|boolean,... On a successful match, all captures are returned as
+ well.  If a capture does not exist, false is returned for that capture.
+ For `all` mode, these are actually all possible matches except the
  maximal match, which is described by the first two return values.
 @raise Returns `nil` and error message string on error.
 */
+/* concept of returning false for unmatched subexprs from lrexlib */
 static int regex_find(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s, NULL);
+    int nret = regex_search(L, &nmatch, &partial, NULL, &mi, &s, NULL);
     if(nret)
 	return nret;
-    if(partial && !matched) {
+    if(partial && !nmatch) {
 	lua_pushboolean(L, 0);
 	return 1;
     }
@@ -5869,11 +5875,13 @@ static int regex_find(lua_State *L)
 	lua_pushinteger(L, end);
     }
     {
-	int nmatch = g_match_info_get_match_count(mi), i;
+	int i;
 	for(i = 1; i < nmatch; i++) {
 	    gint start, end;
-	    g_match_info_fetch_pos(mi, i, &start, &end);
-	    lua_pushlstring(L, s + start, end - start);
+	    if(!g_match_info_fetch_pos(mi, i, &start, &end) || start < 0)
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushlstring(L, s + start, end - start);
 	}
 	g_match_info_free(mi);
 	return nmatch + 1;
@@ -5909,21 +5917,23 @@ Search for a match in a string.
  cannot be determined, and there are no captures).
 @treturn number The location of the last character of the first
  match
-@treturn {string,...} On a successful match, all captures are returned as
- well.  If there are no captures, an empty table is returned.  For `all`
+@treturn {string|boolean,...} On a successful match, all captures are
+ returned as well.   If a capture does not exist, false is returned for
+ that capture. If there are no captures, an empty table is returned.  For `all`
  mode, these are actually all possible matches except the maximal match,
  which is described by the first two return values.
 @raise Returns `nil` and error message string on error.
 */
 static int regex_tfind(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s, NULL);
+    int nret = regex_search(L, &nmatch, &partial, NULL, &mi, &s, NULL);
     if(nret)
 	return nret;
-    if(partial && !matched) {
+    if(partial && !nmatch) {
 	lua_pushboolean(L, 0);
 	return 1;
     }
@@ -5935,12 +5945,14 @@ static int regex_tfind(lua_State *L)
 	lua_pushinteger(L, end);
     }
     {
-	int nmatch = g_match_info_get_match_count(mi), i;
+	int i;
 	lua_createtable(L, nmatch - 1, 0);
 	for(i = 1; i < nmatch; i++) {
 	    gint start, end;
-	    g_match_info_fetch_pos(mi, i, &start, &end);
-	    lua_pushlstring(L, s + start, end - start);
+	    if(!g_match_info_fetch_pos(mi, i, &start, &end) || start < 0)
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushlstring(L, s + start, end - start);
 	    lua_rawseti(L, -2, i);
 	}
 	g_match_info_free(mi);
@@ -5973,31 +5985,35 @@ Search for a match in a string.
 @treturn string|nil|boolean The first capture, or the full match if there
  are no captures, or `nil` if there are no matches, or false if there is only
  a partial match (in which case there are no captures).
-@treturn string,... On a successful match, all remaining captures are
- returned as well.  For `all` mode, which has no captures, these are all
+@treturn string|boolean,... On a successful match, all remaining captures are
+ returned as well.    If a capture does not exist, false is returned for that
+ capture.  For `all` mode, which has no captures, these are all
  possible matches but the maximal match, which is the first returned string.
 @raise Returns `nil` and error message string on error.
 */
 static int regex_match(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
     gboolean do_all;
-    int nret = regex_search(L, &matched, &partial, &do_all, &mi, &s, NULL);
+    int nret = regex_search(L, &nmatch, &partial, &do_all, &mi, &s, NULL);
     if(nret)
 	return nret;
-    if(partial && !matched) {
+    if(partial && !nmatch) {
 	lua_pushboolean(L, 0);
 	return 1;
     }
     {
-	int nmatch = g_match_info_get_match_count(mi), i;
+	int i;
 	if(nmatch > 1) {
 	    for(i = do_all ? 0 : 1; i < nmatch; i++) {
 		gint start, end;
-		g_match_info_fetch_pos(mi, i, &start, &end);
-		lua_pushlstring(L, s + start, end - start);
+		if(!g_match_info_fetch_pos(mi, i, &start, &end) || start < 0)
+		    lua_pushboolean(L, 0);
+		else
+		    lua_pushlstring(L, s + start, end - start);
 	    }
 	    g_match_info_free(mi);
 	    return nmatch - (do_all ? 0 : 1);
@@ -6016,6 +6032,7 @@ typedef struct regex_iter_state {
     GMatchInfo *mi;
     const char *s;
     gboolean partial;
+    int nmatch;
 } regex_iter_state;
 
 static int free_regex_iter_state(lua_State *L)
@@ -6043,18 +6060,21 @@ static int regex_match_iter(lua_State *L)
 		lua_pushboolean(L, 0);
 	    else
 		lua_pushnil(L);
-	}
+	} else
+	    lua_pushnil(L);
 	g_match_info_free(st->mi);
 	st->mi = NULL;
 	return 1;
     }
     {
-	int nmatch = g_match_info_get_match_count(st->mi), i;
+	int nmatch = st->nmatch, i;
 	if(nmatch > 1) {
 	    for(i = 1; i < nmatch; i++) {
 		gint start, end;
-		g_match_info_fetch_pos(st->mi, i, &start, &end);
-		lua_pushlstring(L, st->s + start, end - start);
+		if(!g_match_info_fetch_pos(st->mi, i, &start, &end) || start < 0)
+		    lua_pushboolean(L, 0);
+		else
+		    lua_pushlstring(L, st->s + start, end - start);
 	    }
 	    g_match_info_next(st->mi, NULL);
 	    return nmatch - 1;
@@ -6095,10 +6115,11 @@ Note that a regex created using `all` will return an error.
 */
 static int regex_gmatch(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+    int nret = regex_search(L, &nmatch, &partial, NULL, &mi, &s,
 			    "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
@@ -6111,6 +6132,7 @@ static int regex_gmatch(lua_State *L)
 	st->partial = partial;
 	st->mi = mi;
 	st->s = s;
+	st->nmatch = nmatch;
 	return 1;
     }
 }
@@ -6144,11 +6166,13 @@ static int regex_find_iter(lua_State *L)
 	lua_pushinteger(L, end);
     }
     {
-	int nmatch = g_match_info_get_match_count(st->mi), i;
+	int nmatch = st->nmatch, i;
 	for(i = 1; i < nmatch; i++) {
 	    gint start, end;
-	    g_match_info_fetch_pos(st->mi, i, &start, &end);
-	    lua_pushlstring(L, st->s + start, end - start);
+	    if(!g_match_info_fetch_pos(st->mi, i, &start, &end) || start < 0)
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushlstring(L, st->s + start, end - start);
 	}
 	g_match_info_next(st->mi, NULL);
 	return nmatch + 1;
@@ -6180,10 +6204,11 @@ Note that a regex created using `all` will return an error.
 */
 static int regex_gfind(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+    int nret = regex_search(L, &nmatch, &partial, NULL, &mi, &s,
 			    "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
@@ -6196,6 +6221,7 @@ static int regex_gfind(lua_State *L)
 	st->partial = partial;
 	st->mi = mi;
 	st->s = s;
+	st->nmatch = nmatch;
 	return 1;
     }
 }
@@ -6229,12 +6255,14 @@ static int regex_tfind_iter(lua_State *L)
 	lua_pushinteger(L, end);
     }
     {
-	int nmatch = g_match_info_get_match_count(st->mi), i;
+	int nmatch = st->nmatch, i;
 	lua_createtable(L, nmatch - 1, 0);
 	for(i = 1; i < nmatch; i++) {
 	    gint start, end;
-	    g_match_info_fetch_pos(st->mi, i, &start, &end);
-	    lua_pushlstring(L, st->s + start, end - start);
+	    if(!g_match_info_fetch_pos(st->mi, i, &start, &end) || start < 0)
+		lua_pushboolean(L, 0);
+	    else
+		lua_pushlstring(L, st->s + start, end - start);
 	    lua_rawseti(L, -2, i);
 	}
 	g_match_info_next(st->mi, NULL);
@@ -6267,10 +6295,11 @@ Note that a regex created using `all` will return an error.
 */
 static int regex_gtfind(lua_State *L)
 {
-    gboolean matched, partial;
+    int nmatch;
+    gboolean partial;
     GMatchInfo *mi;
     const char *s;
-    int nret = regex_search(L, &matched, &partial, NULL, &mi, &s,
+    int nret = regex_search(L, &nmatch, &partial, NULL, &mi, &s,
 			    "all mode not supported for gmatch");
     if(nret > 1)
 	return nret;
@@ -6283,6 +6312,7 @@ static int regex_gtfind(lua_State *L)
 	st->partial = partial;
 	st->mi = mi;
 	st->s = s;
+	st->nmatch = nmatch;
 	return 1;
     }
 }
@@ -6306,9 +6336,11 @@ Split a string with a regular expression separator.
 Note that a regex created using `all` or `partial` will return an error.
 @tparam[optchain] number max The maximum number of elements to return.  If
  unspecified or less than 1, all elements are returned.
-@treturn {string,...}  The elements separated by the regular expression.
- Each element is separated by any capture strings from the separator, if
- present.  For example:
+@treturn {string|boolean,...}  The elements separated by the regular
+ expression.  Each element is separated by any capture strings from the
+ separator, if present.  If a capture does not exist, false is returned
+ for that capture.  If there are no captures, only the elements are returned.
+ For example:
 
      rx = glib.regex_new('\\|(.?)\\|')
      spl = rx:split('abc||def|!|ghi')
@@ -6364,6 +6396,7 @@ typedef struct repl_state {
     int tr, tn;
     int nmatch, nsub;
     int laste;
+    int ncap;
 } repl_state;
 
 static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
@@ -6372,7 +6405,7 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
     lua_State *L = rs->L;
     int tr = rs->tr;
     int tn = rs->tn;
-    int nmatch = g_match_info_get_match_count(mi);
+    int nmatch = rs->ncap;
     gint start, end;
     const char *s = g_match_info_get_string(mi);
 
@@ -6387,8 +6420,10 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
     ++rs->nmatch;
     switch(tr) {
       case LUA_TTABLE:
-	g_match_info_fetch_pos(mi, nmatch > 1, &start, &end);
-	lua_pushlstring(L, s + start, end - start);
+	if(!g_match_info_fetch_pos(mi, nmatch > 1, &start, &end) || start < 0)
+	    lua_pushboolean(L, 0);
+	else
+	    lua_pushlstring(L, s + start, end - start);
 	lua_gettable(L, 3);
 	break;
       case LUA_TFUNCTION:
@@ -6397,8 +6432,10 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
 	    int i;
 	    for(i = 1; i < nmatch; i++) {
 		gint start, end;
-		g_match_info_fetch_pos(mi, i, &start, &end);
-		lua_pushlstring(L, s + start, end - start);
+		if(!g_match_info_fetch_pos(mi, i, &start, &end) || start < 0)
+		    lua_pushboolean(L, 0);
+		else
+		    lua_pushlstring(L, s + start, end - start);
 	    }
 	    lua_call(L, nmatch - 1, 1);
 	} else {
@@ -6408,6 +6445,7 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
 	    lua_pushlstring(L, s + start, end - start);
 	    lua_call(L, 1, 1);
 	}
+	break;
       default: {
 	  const char *rt = lua_tostring(L, 3);
 	  gchar *repl = g_match_info_expand_references(mi, rt, NULL);
@@ -6485,11 +6523,13 @@ Replace occurrences of regular expression in string.
 @tparam string|table|function repl The replacement.  If this is a string,
  the string is the replacement text, which supports backslash-escapes for
  capture substitution and case conversion.  If it is a table, the first
- capture (or entire match if there are no captures) is used as a key into
- the table; if the value is a string or number, it is the literal replacement
- text; otherwise, if the value is false or `nil`, no substitution is made.
+ capture (or entire match if there are no captures, or false if the capture
+ exists but is not matched) is used as a key into the table; if the value
+ is a string or number, it is the literal replacement text; otherwise, if
+ the value is false or `nil`, no substitution is made.
  If it is a function, the function is called for every match, with all
- captures (or the entire match if there are no captures) as arguments;
+ captures (or the entire match if there are no captures) as arguments
+ (as with `regex:match`, captures which do not exist are passed as false);
  the return value is treated like the table entries.  For literal
  interpretation of a string, call `regex_escape_string` on it first.
 @see regex_escape_string
@@ -6544,6 +6584,7 @@ static int regex_gsub(lua_State *L)
     rs.tn = tn;
     rs.nmatch = rs.nsub = 0;
     rs.laste = -1;
+    rs.ncap = st->ncap;
     if(rs.tr != LUA_TTABLE && rs.tr != LUA_TFUNCTION) {
 	g_regex_check_replacement(luaL_checkstring(L, 3), NULL, &err);
 	if(err) {
