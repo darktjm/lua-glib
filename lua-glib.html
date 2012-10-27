@@ -902,6 +902,10 @@ glob pattern expansion.</td>
 	<td class="summary">Search for a match in a string.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#regex:tfind">regex:tfind&nbsp;(s[, start[, mflags]])</a></td>
+	<td class="summary">Search for a match in a string.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#regex:match">regex:match&nbsp;(s[, start[, mflags]])</a></td>
 	<td class="summary">Search for a match in a string.</td>
 	</tr>
@@ -911,6 +915,10 @@ glob pattern expansion.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#regex:gfind">regex:gfind&nbsp;(s[, start[, mflags]])</a></td>
+	<td class="summary">Search for all matches in a string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#regex:gtfind">regex:gtfind&nbsp;(s[, start[, mflags]])</a></td>
 	<td class="summary">Search for all matches in a string.</td>
 	</tr>
 	<tr>
@@ -3529,7 +3537,7 @@ This is a wrapper for <code>g_path_skip_root()</code>.
     </dt>
     <dd>
     Obtain the last element of a path.
-This is a wrapper for <code>g_path_basename()</code>.
+This is a wrapper for <code>g_path_get_basename()</code>.
 
     <h3>Parameters:</h3>
     <ul>
@@ -3693,7 +3701,7 @@ This is a wrapper for <code>g_find_program_in_path()</code>.
 
     <h3>Returns:</h3>
     <ol>
-        <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>nil</strong> An absolute path to the program.
+        <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> An absolute path to the program.
     </ol>
 
     <h3>Raises:</h3>
@@ -4475,7 +4483,9 @@ equivalent in GLib.
        <li><code><em>mask</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  The permissions mask.  Permissions set in
  this mask are forced off in any newly created files and directories.
  Either a numeric permissions mask or a POSIX-sytle mode string (e.g.
- &lsquo;og=w&rsquo;, which is the default if this parameter is unspecified).</li>
+ &lsquo;og=w&rsquo;, which is the default if this parameter is unspecified) or
+ the last 9 characters of long directory listing mode (e.g. &lsquo;&mdash;-w&ndash;w-&rsquo;,
+ which is also the default).</li>
     </ul>
 
 
@@ -4500,7 +4510,8 @@ characters.
     <ul>
        <li><code><em>tmpl</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The template.</li>
        <li><code><em>perm</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  File creation permissions.  Either a
- numeric permission mask or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;).</li>
+ numeric permission mask or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;) or
+ the last 9 characters of long directory listing mode (e.g. &lsquo;rwxr-xr-x&rsquo;)</li>
     </ul>
 
 
@@ -4578,8 +4589,9 @@ This is a wrapper for <code>g_mkdir_with_parents()</code>.
     <ul>
        <li><code><em>name</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  Name of directory to create.</li>
        <li><code><em>mode</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;).  If unspecified,
- &lsquo;a=rx,u=w&rsquo; is used (octal 755).</li>
+ creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;) or
+ the last 9 characters of long directory listing mode (e.g. &lsquo;rwxr-xr-x&rsquo;).
+ If unspecified, &lsquo;a=rx,u=w&rsquo; is used (octal 755; &lsquo;rwxr-xr-x&rsquo;)).</li>
     </ul>
 
 
@@ -4605,7 +4617,8 @@ pattern with a unique string and creates a directory by that name.
     <ul>
        <li><code><em>tmpl</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The file name pattern</li>
        <li><code><em>mode</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;).</li>
+ creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;) or
+ the last 9 characters of long directory listing mode (e.g. &lsquo;rwxr-xr-x&rsquo;).</li>
     </ul>
 
 
@@ -4703,8 +4716,9 @@ This is a wrapper for <code>g_mkdir()</code>.
     <ul>
        <li><code><em>name</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The name of the directory.</li>
        <li><code><em>mode</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;).  The default
- is &lsquo;a=rx,u=w&rsquo; (octal 755).</li>
+ creation mode or a POSIX-style mode string (e.g. &lsquo;ug=rw&rsquo;) or
+ the last 9 characters of long directory listing mode (e.g. &lsquo;rwxr-xr-x&rsquo;).
+ The default is &lsquo;a=rx,u=w&rsquo; (octal 755, &lsquo;rwxr-xr-x&rsquo;).</li>
     </ul>
 
 
@@ -5557,8 +5571,66 @@ operator.  This is incompatible with captures and partial matching.</li>
  cannot be determined, and there are no captures).</li>
         <li><strong>number</strong> The location of the last character of the first
  match</li>
-        <li><a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> ,...On a successful match, all captures are returned as
- well</li>
+        <li><a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>boolean</strong> ,...On a successful match, all captures are returned as
+ well.  If a capture does not exist, false is returned for that capture.
+ For <code>all</code> mode, these are actually all possible matches except the
+ maximal match, which is described by the first two return values.</li>
+    </ol>
+
+    <h3>Raises:</h3>
+    Returns <code>nil</code> and error message string on error.
+
+    <h3>see also:</h3>
+    <ul>
+         <a href="http://www.lua.org/manual/5.1/manual.html#pdf-string.find">string.find</a>
+    </ul>
+</dd>
+    <dt>
+    <a name = "regex:tfind"></a>
+    <strong>regex:tfind&nbsp;(s[, start[, mflags]])</strong>
+    </dt>
+    <dd>
+    Search for a match in a string.
+
+    <h3>Parameters:</h3>
+    <ul>
+       <li><code><em>s</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The string to search</li>
+       <li><code><em>start</em></code>: <strong>number</strong>  The start position.</li>
+       <li><code><em>mflags</em></code>: {<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> ,...}<p> Additional match flags:</p>
+
+<ul>
+<li><code>anchored</code> &ndash; pattern must match at start of string</li>
+<li><code>notbol</code> &ndash; ^ does not match the start of string (but \A does)</li>
+<li><code>noteol</code> &ndash; $ does not match the end of string (but \Z does)</li>
+<li><code>notempty</code> &ndash; the match length must be greater than zero</li>
+<li><code>partial</code> &ndash; use partial (incremental) matching; incompatible with <code>all</code></li>
+<li><code>newline_cr</code> &ndash; Newlines for $, ^, and . are \r.</li>
+<li><code>newline_lf</code> &ndash; Newlines for $, ^, and . are \n.</li>
+<li><code>newline_crlf</code> &ndash; Newlines for $, ^, and . are \r\n.</li>
+<li><code>newline_any</code> &ndash; Newlines for $, ^, and . are any.</li>
+<li><code>all</code> &ndash; changes the behavior of matches from returning captures to
+returning all potential matches.  That is, any variable-length matching
+operator will attempt to match at every possible length, rather than the
+most/least greedy depending on the ungreedy option an the ? greediness
+operator.  This is incompatible with captures and partial matching.</li>
+</ul>
+</li>
+    </ul>
+
+
+    <h3>Returns:</h3>
+    <ol>
+        <li><strong>number</strong> |<strong>nil</strong> |<strong>boolean</strong> The location of the start of the first match, or
+ <code>nil</code> if there are no matches, or false if there is only a partial match,
+ in which case no further results are returned (the location of the match
+ cannot be determined, and there are no captures).</li>
+        <li><strong>number</strong> The location of the last character of the first
+ match</li>
+        <li>{<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>boolean</strong> ,...}On a successful match, all captures are
+ returned as well.   If a capture does not exist, false is returned for
+ that capture. If there are no captures, an empty table is returned.  For <code>all</code>
+ mode, these are actually all possible matches except the maximal match,
+ which is described by the first two return values.</li>
     </ol>
 
     <h3>Raises:</h3>
@@ -5607,8 +5679,10 @@ operator.  This is incompatible with captures and partial matching.</li>
         <li><a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>nil</strong> |<strong>boolean</strong> The first capture, or the full match if there
  are no captures, or <code>nil</code> if there are no matches, or false if there is only
  a partial match (in which case there are no captures).</li>
-        <li><a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> ,...On a successful match, all remaining captures are
- returned as well</li>
+        <li><a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>boolean</strong> ,...On a successful match, all remaining captures are
+ returned as well.    If a capture does not exist, false is returned for that
+ capture.  For <code>all</code> mode, which has no captures, these are all
+ possible matches but the maximal match, which is the first returned string.</li>
     </ol>
 
     <h3>Raises:</h3>
@@ -5703,8 +5777,50 @@ operator.  This is incompatible with captures and partial matching.</li>
 
     <h3>see also:</h3>
     <ul>
-         <li><a href="http://www.lua.org/manual/5.1/manual.html#pdf-string.gfind">string.gfind</a></li>
-         <li><a href="lua-glib.html#regex:find">regex:find</a></li>
+         <a href="lua-glib.html#regex:find">regex:find</a>
+    </ul>
+</dd>
+    <dt>
+    <a name = "regex:gtfind"></a>
+    <strong>regex:gtfind&nbsp;(s[, start[, mflags]])</strong>
+    </dt>
+    <dd>
+    Search for all matches in a string.
+
+    <h3>Parameters:</h3>
+    <ul>
+       <li><code><em>s</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The string to search</li>
+       <li><code><em>start</em></code>: <strong>number</strong>  The start position.</li>
+       <li><code><em>mflags</em></code>: {<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> ,...} Additional match flags:</p>
+
+<ul>
+<li><code>anchored</code> &ndash; pattern must match at start of string</li>
+<li><code>notbol</code> &ndash; ^ does not match the start of string (but \A does)</li>
+<li><code>noteol</code> &ndash; $ does not match the end of string (but \Z does)</li>
+<li><code>notempty</code> &ndash; the match length must be greater than zero</li>
+<li><code>partial</code> &ndash; use partial (incremental) matching</li>
+<li><code>newline_cr</code> &ndash; Newlines for $, ^, and . are \r.</li>
+<li><code>newline_lf</code> &ndash; Newlines for $, ^, and . are \n.</li>
+<li><code>newline_crlf</code> &ndash; Newlines for $, ^, and . are \r\n.</li>
+<li><code>newline_any</code> &ndash; Newlines for $, ^, and . are any.</li>
+</ul>
+
+
+<p>Note that a regex created using <code>all</code> will return an error.</li>
+    </ul>
+
+
+    <h3>Returns:</h3>
+    <ol>
+        <strong>function</strong> An iterator function which, on each iteration,
+ returns the same as <a href="lua-glib.html#regex:tfind">regex:tfind</a>  would have for the next match in the
+ string.
+    </ol>
+
+
+    <h3>see also:</h3>
+    <ul>
+         <a href="lua-glib.html#regex:tfind">regex:tfind</a>
     </ul>
 </dd>
     <dt>
@@ -5740,9 +5856,11 @@ operator.  This is incompatible with captures and partial matching.</li>
 
     <h3>Returns:</h3>
     <ol>
-        {<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> ,...}<p>The elements separated by the regular expression.
- Each element is separated by any capture strings from the separator, if
- present.  For example:</p>
+        {<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>boolean</strong> ,...}<p>The elements separated by the regular
+ expression.  Each element is separated by any capture strings from the
+ separator, if present.  If a capture does not exist, false is returned
+ for that capture.  If there are no captures, only the elements are returned.
+ For example:</p>
 
 <pre><code> rx = glib.regex_new('\\|(.?)\\|')
  spl = rx:split('abc||def|!|ghi')
@@ -5766,11 +5884,13 @@ operator.  This is incompatible with captures and partial matching.</li>
        <li><code><em>repl</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<a href="http://www.lua.org/manual/5.1/manual.html#5.5">table</a> |<strong>function</strong>  The replacement.  If this is a string,
  the string is the replacement text, which supports backslash-escapes for
  capture substitution and case conversion.  If it is a table, the first
- capture (or entire match if there are no captures) is used as a key into
- the table; if the value is a string or number, it is the literal replacement
- text; otherwise, if the value is false or <code>nil</code>, no substitution is made.
+ capture (or entire match if there are no captures, or false if the capture
+ exists but is not matched) is used as a key into the table; if the value
+ is a string or number, it is the literal replacement text; otherwise, if
+ the value is false or <code>nil</code>, no substitution is made.
  If it is a function, the function is called for every match, with all
- captures (or the entire match if there are no captures) as arguments;
+ captures (or the entire match if there are no captures) as arguments
+ (as with <a href="lua-glib.html#regex:match">regex:match</a> , captures which do not exist are passed as false);
  the return value is treated like the table entries.  For literal
  interpretation of a string, call <a href="lua-glib.html#regex_escape_string">regex_escape_string</a>  on it first.</li>
        <li><code><em>start</em></code>: <strong>number</strong>  The start position.</li>
