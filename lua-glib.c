@@ -2296,7 +2296,7 @@ static int glib_path_split_root(lua_State *L)
 
 /***
 Obtain the last element of a path.
-This is a wrapper for `g_path_basename()`.
+This is a wrapper for `g_path_get_basename()`.
 @function path_get_basename
 @tparam string d The path to split
 @treturn string The last path element of the path
@@ -2474,7 +2474,7 @@ Locate an executable using the operating system's search method.
 This is a wrapper for `g_find_program_in_path()`.
 @function find_program_in_path
 @tparam string p The program name to find
-@treturn string|nil An absolute path to the program.
+@treturn string An absolute path to the program.
 @raise Returns `nil` if *p* can't be  found.
 */
 static int glib_find_program_in_path(lua_State *L)
@@ -4192,7 +4192,47 @@ static int getmode(lua_State *L, int arg, int def, int isdir)
     if(lua_isnumber(L, arg))
 	return lua_tointeger(L, arg) & 07777;
     else if(lua_isstring(L, arg)) {
-	const char *s = lua_tostring(L, arg);
+	size_t len;
+	const char *s = lua_tolstring(L, arg, &len);
+	if(len == 9) {
+	    static GRegex *mode_rx = NULL;
+	    if(!mode_rx)
+		mode_rx = g_regex_new("[r-][w-][xsS-][r-][w-][xsS-][r-][w-][xtT-]", 0, 0, NULL);
+	    if(g_regex_match_full(mode_rx, s, len, 0, 0, NULL, NULL)) {
+		def = 0;
+		if(*s == 'r')
+		    def |= 0400;
+		if(*++s == 'w')
+		    def |= 0200;
+		if(*++s == 'x')
+		    def |= 0100;
+		else if(*s == 's')
+		    def |= 04100;
+		else if(*s == 'S')
+		    def |= 04000;
+		if(*++s == 'r')
+		    def |= 0040;
+		if(*++s == 'w')
+		    def |= 0020;
+		if(*++s == 'x')
+		    def |= 0010;
+		else if(*s == 's')
+		    def |= 02010;
+		else if(*s == 'S')
+		    def |= 02000;
+		if(*++s == 'r')
+		    def |= 0004;
+		if(*++s == 'w')
+		    def |= 0002;
+		if(*++s == 'x')
+		    def |= 0001;
+		else if(*s == 't')
+		    def |= 01001;
+		else if(*s == 'T')
+		    def |= 01000;
+		return def;
+	    }
+	}
 	while(*s) {
 	    int mask = 07777; /* all */
 	    int nowho = 1;
@@ -4303,7 +4343,9 @@ equivalent in GLib.
 @tparam[opt] string|number mask The permissions mask.  Permissions set in
  this mask are forced off in any newly created files and directories.
  Either a numeric permissions mask or a POSIX-sytle mode string (e.g.
- 'og=w', which is the default if this parameter is unspecified).
+ 'og=w', which is the default if this parameter is unspecified) or
+ the last 9 characters of long directory listing mode (e.g. '----w--w-',
+ which is also the default).
 @treturn number The previous mask.
 */
 static int glib_umask(lua_State *L)
@@ -4320,7 +4362,8 @@ characters.
 @function mkstemp
 @tparam string tmpl The template.
 @tparam[opt] string|number perm File creation permissions.  Either a
- numeric permission mask or a POSIX-style mode string (e.g. 'ug=rw').
+ numeric permission mask or a POSIX-style mode string (e.g. 'ug=rw') or
+ the last 9 characters of long directory listing mode (e.g. 'rwxr-xr-x')
 @treturn file A file descriptor for the newly created file, open for
  reading and writing (`w+b`).
 @treturn string The name of the created file.
@@ -4442,8 +4485,9 @@ This is a wrapper for `g_mkdir_with_parents()`.
 @function mkdir_with_parents
 @tparam string name Name of directory to create.
 @tparam[opt] string|number mode File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. 'ug=rw').  If unspecified,
- 'a=rx,u=w' is used (octal 755).
+ creation mode or a POSIX-style mode string (e.g. 'ug=rw') or
+ the last 9 characters of long directory listing mode (e.g. 'rwxr-xr-x').
+ If unspecified, 'a=rx,u=w' is used (octal 755; 'rwxr-xr-x')).
 @treturn boolean True
 @raise Returns false and error message string on error.
 */
@@ -4470,7 +4514,8 @@ pattern with a unique string and creates a directory by that name.
 @function mkdtemp
 @tparam string tmpl The file name pattern
 @tparam[opt] string|number mode File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. 'ug=rw').
+ creation mode or a POSIX-style mode string (e.g. 'ug=rw') or
+ the last 9 characters of long directory listing mode (e.g. 'rwxr-xr-x').
 @treturn string The name of the created directory
 @raise Returns `nil` and error message string on error.
 */
@@ -4600,8 +4645,9 @@ This is a wrapper for `g_mkdir()`.
 @function mkdir
 @tparam string name The name of the directory.
 @tparam[opt] string|number mode File permissions.  Either a numeric
- creation mode or a POSIX-style mode string (e.g. 'ug=rw').  The default
- is 'a=rx,u=w' (octal 755).
+ creation mode or a POSIX-style mode string (e.g. 'ug=rw') or
+ the last 9 characters of long directory listing mode (e.g. 'rwxr-xr-x').
+ The default is 'a=rx,u=w' (octal 755, 'rwxr-xr-x').
 @treturn boolean True
 @raise Returns false and error message string on error.
 */
@@ -6009,7 +6055,8 @@ static int regex_find_iter(lua_State *L)
 		lua_pushboolean(L, 0);
 	    else
 		lua_pushnil(L);
-	}
+	} else
+	    lua_pushnil(L);
 	g_match_info_free(st->mi);
 	st->mi = NULL;
 	return 1;
@@ -6036,7 +6083,6 @@ static int regex_find_iter(lua_State *L)
 /***
 Search for all matches in a string.
 @function regex:gfind
-@see string.gfind
 @see regex:find
 @tparam string s The string to search
 @tparam[opt] number start The start position.
