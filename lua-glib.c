@@ -6405,7 +6405,7 @@ static gboolean regex_repl(const GMatchInfo *mi, GString *res, gpointer data)
     lua_State *L = rs->L;
     int tr = rs->tr;
     int tn = rs->tn;
-    int nmatch = rs->ncap;
+    int nmatch = rs->ncap + 1;
     gint start, end;
     const char *s = g_match_info_get_string(mi);
 
