@@ -5808,6 +5808,7 @@ static int regex_search(lua_State *L, int *nmatched, gboolean *partial,
 	    lua_pushnil(L);
 	    return 1;
 	}
+	return 0;
     } else if(!*nmatched) {
 	g_match_info_free(*mi);
 	lua_pushnil(L);
