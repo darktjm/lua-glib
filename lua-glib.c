@@ -4147,8 +4147,25 @@ they follow symbolic links.
 @tparam string name The path name to test
 @treturn boolean true if *name* names a symbolic link
 */
-/* FIXME: support symlink in Windows (not sure how) */
-file_test(IS_SYMLINK, is_symlink)
+static int glib_is_symlink(lua_State *L)
+{
+#ifndef G_OS_WIN32
+    lua_pushboolean(L, g_file_test(luaL_checkstring(L, 1), G_FILE_TEST_IS_SYMLINK));
+#else
+    /* partly lifted from python */
+    wchar_t *f = g_utf8_to_utf16(luaL_checkstring(L, 1), -1, NULL, NULL, NULL);
+    WIN32_FIND_DATAW find_data;
+    gboolean res = FALSE;
+    HANDLE find_data_handle = FindFirstFileW(f, &find_data);
+    g_free(f);
+    if(find_data_handle != INVALID_HANDLE_VALUE) {
+	res = find_data.dwReserved0 == IO_REPARSE_TAG_SYMLINK;
+	FindClose(find_data_handle);
+    }
+    lua_pushboolean(L, res);
+#endif
+    return 1;
+}
 /***
 Test if the given path points to an executable file.
 This function is a wrapper for `g_file_test()`.  Note that GLib uses
@@ -4800,7 +4817,6 @@ points to.
 @raise Returns `nil` and error message string on error.
 */
 /* FIXME: support nanosecond time stamps (no portable way to detect) */
-/* FIXME: support symlink in Windows (not sure how) */
 static int glib_stat(lua_State *L)
 {
     const char *n = luaL_checkstring(L, 1);
@@ -4837,9 +4853,25 @@ static int glib_stat(lua_State *L)
 		++actret;
 	}
     }
-    if(is_link)
+    if(is_link) {
 	ok = g_lstat(n, &sbuf) == 0;
-    else
+#ifdef G_OS_WIN32
+	{
+	    /* partly lifted from python */
+	    wchar_t *f = g_utf8_to_utf16(n, -1, NULL, NULL, NULL);
+	    WIN32_FIND_DATAW find_data;
+	    gboolean islink = FALSE;
+	    HANDLE find_data_handle = FindFirstFileW(f, &find_data);
+	    g_free(f);
+	    if(find_data_handle != INVALID_HANDLE_VALUE) {
+		islink = find_data.dwReserved0 == IO_REPARSE_TAG_SYMLINK;
+		FindClose(find_data_handle);
+	    }
+	    if(islink)
+		st->st_mode = (st->st_mode &~S_IFMT) | S_IFLNK;
+	}
+#endif
+    } else
 	ok = g_stat(n, &sbuf) == 0;
     if(!ok) {
 	int en = errno;
@@ -5184,15 +5216,15 @@ static int glib_link(lua_State *L)
     lua_pushboolean(L, TRUE);
     return 1;
 #endif
-#ifdef G_OS_WINDOWS
+#ifdef G_OS_WIN32
     wchat_t *fw, *tw;
-    tw = g_utf8_to_utf16(t -1, NULL, NULL, NULL);
+    tw = g_utf8_to_utf16(t, -1, NULL, NULL, NULL);
     if(!fw) {
 	lua_pushboolean(L, FALSE);
 	lua_pushliteral(L, "Invalid Unicode target");
 	return 2;
     }
-    fw = g_utf8_to_utf16(f -1, NULL, NULL, NULL);
+    fw = g_utf8_to_utf16(f, -1, NULL, NULL, NULL);
     if(!fw) {
 	g_free(tw);
 	lua_pushboolean(L, FALSE);
@@ -5216,6 +5248,8 @@ static int glib_link(lua_State *L)
     } else
 	/* maybe it would be safer to check if avail first as well... */
 	ret = CreateHardLinkW(fw, tw, NULL);
+    g_free(tw);
+    g_free(fw);
     if(ret)
 	lua_pushboolean(L, ret);
     else {
@@ -5225,7 +5259,7 @@ static int glib_link(lua_State *L)
 	g_free(msg);
     }
 #endif
-#if !defined(G_OS_UNIX) && !defined(G_OS_WINDOWS)
+#if !defined(G_OS_UNIX) && !defined(G_OS_WIN32)
     lua_pushboolean(L, FALSE);
     lua_pushliteral(L, "linking not supported")
     return 2;
