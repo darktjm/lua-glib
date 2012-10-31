@@ -773,6 +773,10 @@ exception sections (@raise) instead.</p>
 	<td class="name" nowrap><a href="#utime">utime&nbsp;(name[, atime[, mtime]])</a></td>
 	<td class="summary">Change timestamp on filesystem object.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#link">link&nbsp;(target, name[, soft])</a></td>
+	<td class="summary">Create a link.</td>
+	</tr>
 </table>
 <h2><a href="#URI_Functions">URI Functions</a></h2>
 <table class="function_list">
@@ -3538,6 +3542,11 @@ This is a wrapper for <code>g_path_skip_root()</code>.
     <dd>
     Obtain the last element of a path.
 This is a wrapper for <code>g_path_get_basename()</code>.
+Note that if the last element of a path is blank, this may return the
+second-to-last element.  Also, if this is simply a directory separator,
+the directory separator is returned.  In other words, it is not possible
+to reconstruct the original file name by appending results from this
+function.
 
     <h3>Parameters:</h3>
     <ul>
@@ -3559,6 +3568,10 @@ This is a wrapper for <code>g_path_get_basename()</code>.
     <dd>
     Obtain all but the last element of a path.
 This is a wrapper for <code>g_path_dirname()</code>.
+Note that if there is no parent element, and the path is relative, . may be
+returned.  If the path is absolute, the absolute prefix may be returned
+even if it is the only element present.  If there is a terminating directory
+separator, this may return the same path element as <a href="lua-glib.html#path_get_basename">path_get_basename</a> .
 
     <h3>Parameters:</h3>
     <ul>
@@ -3582,17 +3595,25 @@ This is a wrapper for <code>g_path_dirname()</code>.
 This is a wrapper for <code>g_build_filenamev()</code>.  There is no inverse operation,
 but it can be implemented in Lua:</p>
 
-<pre><code>function split_filename(f)
+<pre><code>-- assumes multiple consecutive directory separators are the same as
+-- just one separator (true on non-root in Windows and everywhere in UNIX)
+-- but as a counterexample, AmigaOS has no . and .., but instead uses
+-- blank to mean both:
+--    "" == UNIX .  "/x" == ../x "x///y" == UNIX x/../../y
+function split_filename(f)
     local res = {}
     local r
     r, f = glib.path_split_root(f)
-    while f ~= '' do
-        local b = glib.path_get_basename(f)
-        table.insert(res, 1, b)
-        if b == f then break end
-        f = glib.path_get_dirname(f)
+    -- note: it may be a good idea to trim r as well:
+    --  convert ^[dir_sep]+$ to dir_sep[0] (strip duplicate dir_sep)
+    --  convert ^([^dir_sep].*?)[dir_sep]*$ to \1 (stip trailing dir_sep)
+    local rx = glib.regex_new('[' .. glib.regex_escape_string(glib.dir_separator) .. ']')
+    local i, e, laste
+    for i, e in ipairs(rx:split(f)) do
+        if e ~= '' then table.insert(res, e) end
+        laste = e
     end
-    return r, res
+    if laste == '' then table.insert(res, '') end
 end
 </code></pre>
 
@@ -4939,6 +4960,34 @@ This is a wrapper for <code>g_utime()</code>.
 
     <h3>Raises:</h3>
     Returns false and error message string on error.
+
+</dd>
+    <dt>
+    <a name = "link"></a>
+    <strong>link&nbsp;(target, name[, soft])</strong>
+    </dt>
+    <dd>
+    Create a link.
+This is not a wrapper for any GLib function, since GLib does not support
+links portably.  It creates a hard link or soft link, if supported.  Note
+that on Windows, whether or not the target is a directory must be known at
+link creation time.  This is discovered by checking the target.
+
+    <h3>Parameters:</h3>
+    <ul>
+       <li><code><em>target</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The link&rsquo;s target</li>
+       <li><code><em>name</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The name of the link to create</li>
+       <li><code><em>soft</em></code>: <strong>boolean</strong>  If true, create a soft link</li>
+    </ul>
+
+
+    <h3>Returns:</h3>
+    <ol>
+        <strong>boolean</strong> True
+    </ol>
+
+    <h3>Raises:</h3>
+    Returns False and an error message string on failure
 
 </dd>
 </dl>
