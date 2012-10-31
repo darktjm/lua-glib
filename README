@@ -2,5 +2,14 @@ This is yet another Lua glib binding.  See the top of lua-glib.c for
 overview, and generate the HTML documentation (lua-glib.html) for complete
 documentation.  The build is done using Odin, available as a separate
 project.  Or you can just read the overview and Odinfile and figure it
-out for yourself.
+out for yourself.  It's just one C file; compile into a shared object
+with lua and GLib libraries.
+
+This was built and tested using GLib 2.32.  It should work with
+versions as far back as 2.26, with a few missing features (documented
+as such; look for "available with GLib" or "ignored with GLib" in
+lua-glib.html).  The reason 2.26 was chosen is that it is the oldest
+version permitted with the GLIB_VERSION_MIN_REQUIRED macro, even though
+I could've gone as low as 2.18 without significant loss of
+functionality.
 

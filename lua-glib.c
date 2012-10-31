@@ -4,12 +4,12 @@ Unlike other lua-glib implementations, this is not meant to be a
 stepping stone for GTK+ support.  It is meant to be a portability
 and utility library.  There are other projects which provide
 support for GTK+ and other various derivatives of GLib.  The specific
-version against this was developed was 2.32.4; I have not fully scanned
-the documentation to determine what functions should be guarded using
-the GLib version, so it may require a very recent (but not more)
-version of GLib.
+version against this was developed was 2.32.4; I have scanned the
+documentation for added symbols, and it should compile as far back as
+version 2.26 with a few minor missing features (search for "available with
+GLib" or "ignored with GLib").
 
-This package was originally part of another proect with a weird
+This package was originally part of another project with a weird
 build system, so no build support is provided in this standalone
 version, at least for now.  Just compile with appropriate flags
 to create a shared library linked against the Lua and GLib libraries.
@@ -114,6 +114,10 @@ Questions/comments to darktjm@gmail.com.
 /* $Id$ */
 
 #include <glib.h>
+/* MIN_REQUIRED drops deprecation warnings and doesn't work prior to 2.26 */
+#if !GLIB_CHECK_VERSION(2, 26, 0)
+#error GLib too old
+#endif
 #include <glib/gi18n.h>
 #include <glib/gstdio.h>
 #include <lua.h>
@@ -927,9 +931,12 @@ static int glib_get_mirror_char(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 30, 0)
 /***
 Find ISO 15924 script for a Unicode character.
 This is a wrapper for `g_unichar_get_script()`.
+
+This is only available with GLib 2.30 or later.
 @function get_script
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
@@ -946,6 +953,7 @@ static int glib_get_script(lua_State *L)
     lua_pushlstring(L, (char *)&ret, 4);
     return 1;
 }
+#endif
 
 /***
 Obtain a substring of a utf-8-encoded string.
@@ -1567,6 +1575,7 @@ static int glib_sha256sum(lua_State *L)
     return glib_sum(L, G_CHECKSUM_SHA256);
 }
 
+#if GLIB_CHECK_VERSION(2, 30, 0)
 /*********************************************************************/
 /***
 Secure HMAC Digests
@@ -1670,6 +1679,8 @@ static int glib_hmac(lua_State *L, GChecksumType ct)
 /***
 Compute secure HMAC digest using MD5.
 This is a wrapper for `g_hmac_new()` and friends.
+
+This is only available with GLib 2.30 or later.
 @function md5hmac
 @see _hmac_
 @tparam string key HMAC key
@@ -1688,6 +1699,8 @@ static int glib_md5hmac(lua_State *L)
 /***
 Compute secure HMAC digest using SHA1.
 This is a wrapper for `g_hmac_new()` and friends.
+
+This is only available with GLib 2.30 or later.
 @function sha1hmac
 @see _hmac_
 @tparam string key HMAC key
@@ -1706,6 +1719,8 @@ static int glib_sha1hmac(lua_State *L)
 /***
 Compute secure HMAC digest using SHA256.
 This is a wrapper for `g_hmac_new()` and friends.
+
+This is only available with GLib 2.30 or later.
 @function sha256hmac
 @see _hmac_
 @tparam string key HMAC key
@@ -1720,6 +1735,7 @@ static int glib_sha256hmac(lua_State *L)
 {
     return glib_hmac(L, G_CHECKSUM_SHA256);
 }
+#endif
 
 /*********************************************************************/
 /***
@@ -1812,10 +1828,13 @@ static int glib_ndpgettext4(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 28, 0)
 /***
 Obtain list of valid locale names.
 This is a wrapper for `g_get_locale_variants()` and
 `g_get_language_names()`.
+
+This is only available with GLib 2.28 or later.
 @function get_locale_variants
 @tparam[opt] string locale If present, find valid locale names derived
  from this.  Otherwise, find valid names for the default locale (including C).
@@ -1842,6 +1861,7 @@ static int glib_get_locale_variants(lua_State *L)
 	g_strfreev(var);
     return 1;
 }
+#endif
 
 /*********************************************************************/
 /***
@@ -2797,9 +2817,12 @@ static int glib_path_canonicalize(lua_State *L)
 #endif
 }
 
+#if GLIB_CHECK_VERSION(2, 30, 0)
 /***
 Print sizes in scientific notation.
 This is a wrapper for `g_format_size_full()`.
+
+This is only available with GLib 2.30 or later.
 @function format_size
 @tparam number size The size to format
 @tparam[opt] boolean pow2 Set to true to use power-of-2 units rather
@@ -2823,6 +2846,7 @@ static int glib_format_size(lua_State *L)
     g_free(res);
     return 1;
 }
+#endif
 
 /***
 Locate an executable using the operating system's search method.
@@ -4880,10 +4904,13 @@ static int glib_mkdir_with_parents(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 30, 0)
 /***
 Create a unique tempoarary directory from a pattern.
 This is a wrapper for `g_mkdtemp`.  It replaces 6 consecutive Xs in the
 pattern with a unique string and creates a directory by that name.
+
+This is only available with GLib 2.30 or later.
 @function mkdtemp
 @tparam string tmpl The file name pattern
 @tparam[opt] string|number mode File permissions.  Either a numeric
@@ -4915,6 +4942,8 @@ Create a unique temporary directory in the standard temporary directory.
 This is a wrapper for `g_dir_make_tmp()`.  It creates a new, unique
 directory in the standard temporary directory by replacing 6 consecutive
 Xs in the template.
+
+This is only available with GLib 2.30 or later.
 @function dir_make_tmp
 @tparam[opt] string tmpl The template.  If unspecified, a default
  template will be used.
@@ -4937,6 +4966,7 @@ static int glib_dir_make_tmp(lua_State *L)
     g_free(ret);
     return 1;
 }
+#endif
 
 typedef struct dir_state {
     GDir *dir;
@@ -5932,7 +5962,7 @@ Perl-compatible Regular Expressions
 
 typedef struct regex_state {
     GRegex *rex;
-    gboolean do_all;
+    gboolean do_all, do_partial;
     int ncap;
 } regex_state;
 
@@ -6090,8 +6120,22 @@ static int glib_regex_new(lua_State *L)
     }
     if(stop > 2 && !get_mfl(L, 3, &mfl, &st->do_all))
 	return 2;
+    st->do_partial = (mfl & G_REGEX_MATCH_PARTIAL) != 0;
     if(memchr(rex, 0, len)) {
+#if GLIB_CHECK_VERSION(2, 30, 0)
 	gchar *esc = g_regex_escape_nul(rex, len);
+#else
+	/* quick and dirty */
+	gchar *esc = g_malloc(len * 4 + 1), *p;
+	for(p = esc; len > 0; len--, esc++, rex++) {
+	    if(*rex)
+		*p = *rex;
+	    else {
+		memcpy(p, "\\x00", 4);
+		p += 3;
+	    }
+	}
+#endif
 	st->rex = g_regex_new(esc, cfl, mfl, &err);
 	g_free(esc);
     } else
@@ -6261,8 +6305,7 @@ static int regex_search(lua_State *L, int *nmatched, gboolean *partial,
 	lua_pushstring(L, no_all);
 	return 2;
     }
-    *partial = (mfl & G_REGEX_MATCH_PARTIAL) ||
-	       (g_regex_get_match_flags(st->rex) & G_REGEX_MATCH_PARTIAL);
+    *partial = (mfl & G_REGEX_MATCH_PARTIAL) || st->do_partial;
     if(do_all && *partial) {
 	lua_pushnil(L);
 	lua_pushliteral(L, "Partial mode and All mode are incompatible");
@@ -6844,8 +6887,7 @@ static int regex_split(lua_State *L)
 	lua_pushliteral(L, "all mode not supported for split");
 	return 2;
     }
-    partial = (mfl & G_REGEX_MATCH_PARTIAL) ||
-	      (g_regex_get_match_flags(st->rex) & G_REGEX_MATCH_PARTIAL);
+    partial = (mfl & G_REGEX_MATCH_PARTIAL) || st->do_partial;
     if(partial) {
 	lua_pushnil(L);
 	lua_pushliteral(L, "partial mode not supported for split");
@@ -7082,8 +7124,7 @@ static int regex_gsub(lua_State *L)
 	lua_pushliteral(L, "all mode not supported for gsub");
 	return 2;
     }
-    partial = (mfl & G_REGEX_MATCH_PARTIAL) ||
-	      (g_regex_get_match_flags(st->rex) & G_REGEX_MATCH_PARTIAL);
+    partial = (mfl & G_REGEX_MATCH_PARTIAL) || st->do_partial;
     if(partial) {
 	lua_pushnil(L);
 	lua_pushliteral(L, "partial mode not supported for gsub");
@@ -9337,7 +9378,9 @@ static luaL_Reg lua_funcs[] = {
     fent(break_type),
     fent(get_mirror_char),
     /* if people really need script, they can deal with the ISO code */
+#if GLIB_CHECK_VERSION(2, 30, 0)
     fent(get_script),
+#endif
     /* the proper way to support the rest would be to make unicode strings */
     /* a first-class type.  Not happening here, though */
     /* instead, most are just dropped */
@@ -9365,14 +9408,18 @@ static luaL_Reg lua_funcs[] = {
     fent(md5sum),
     fent(sha1sum),
     fent(sha256sum),
+#if GLIB_CHECK_VERSION(2, 30, 0)
     /* Secure HMAC Digests */
     fent(md5hmac),
     fent(sha1hmac),
     fent(sha256hmac),
+#endif
     /* Internationalization */
     /* macros are in global */
     /* local helper functions are not supported */
+#if GLIB_CHECK_VERSION(2, 28, 0)
     fent(get_locale_variants),
+#endif
     /* Date and Time Functions */
     fent(sleep),
     fent(usleep),
@@ -9407,7 +9454,9 @@ static luaL_Reg lua_funcs[] = {
     fent(build_filename),
     fent(build_path),
     fent(path_canonicalize),
+#if GLIB_CHECK_VERSION(2, 30, 0)
     fent(format_size),
+#endif
     fent(find_program_in_path),
     /* bit ops not worth supporting; better to add them to lua-bit */
     /* g_spaced_primes_closest seems too internal-use */
