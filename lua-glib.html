@@ -41,9 +41,6 @@
 <li><a href="#Date_and_Time_Functions">Date and Time Functions</a></li>
 <li><a href="#Random_Numbers">Random Numbers</a></li>
 <li><a href="#Miscellaneous_Utility_Functions">Miscellaneous Utility Functions</a></li>
-<li><a href="#Timers">Timers</a></li>
-<li><a href="#Class_timer">Class timer</a></li>
-<li><a href="#Spawning_Processes">Spawning Processes</a></li>
 <li><a href="#Class_process">Class process</a></li>
 <li><a href="#File_Utilities">File Utilities</a></li>
 <li><a href="#URI_Functions">URI Functions</a></li>
@@ -76,12 +73,12 @@
 stepping stone for GTK+ support.  It is meant to be a portability
 and utility library.  There are other projects which provide
 support for GTK+ and other various derivatives of GLib.  The specific
-version against this was developed was 2.32.4; I have not fully scanned
-the documentation to determine what functions should be guarded using
-the GLib version, so it may require a very recent (but not more)
-version of GLib.</p>
+version against this was developed was 2.32.4; I have scanned the
+documentation for added symbols, and it should compile as far back as
+version 2.26 with a few minor missing features (search for &ldquo;available with
+GLib&rdquo; or &ldquo;ignored with GLib&rdquo;).</p>
 
-<p>This package was originally part of another proect with a weird
+<p>This package was originally part of another project with a weird
 build system, so no build support is provided in this standalone
 version, at least for now.  Just compile with appropriate flags
 to create a shared library linked against the Lua and GLib libraries.</p>
@@ -571,53 +568,8 @@ exception sections (@raise) instead.</p>
 	<td class="summary">Construct a path from its constituents.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#format_size">format_size&nbsp;(size[, pow2[, long]])</a></td>
-	<td class="summary">Print sizes in scientific notation.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#find_program_in_path">find_program_in_path&nbsp;(p)</a></td>
-	<td class="summary">Locate an executable using the operating system&rsquo;s search method.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#qsort">qsort&nbsp;(t[, cmp])</a></td>
-	<td class="summary">Sort a table using a stable quicksort algorithm.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#cmp">cmp&nbsp;(a, b)</a></td>
-	<td class="summary">Compare two objects.</td>
-	</tr>
-</table>
-<h2><a href="#Timers">Timers</a></h2>
-<table class="function_list">
-	<tr>
-	<td class="name" nowrap><a href="#timer_new">timer_new&nbsp;()</a></td>
-	<td class="summary">Create a stopwatch-like timer.</td>
-	</tr>
-</table>
-<h2><a href="#Class_timer">Class timer</a></h2>
-<table class="function_list">
-	<tr>
-	<td class="name" nowrap><a href="#timer:start">timer:start&nbsp;()</a></td>
-	<td class="summary">Start or reset the timer.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#timer:stop">timer:stop&nbsp;()</a></td>
-	<td class="summary">Stop the timer if it is running.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#timer:continue">timer:continue&nbsp;()</a></td>
-	<td class="summary">Resume the timer if it is stopped.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#timer:elapsed">timer:elapsed&nbsp;()</a></td>
-	<td class="summary">Return the amount of time counted so far.</td>
-	</tr>
-</table>
-<h2><a href="#Spawning_Processes">Spawning Processes</a></h2>
-<table class="function_list">
-	<tr>
-	<td class="name" nowrap><a href="#spawn">spawn&nbsp;(args)</a></td>
-	<td class="summary">Run a command asynchronously.</td>
+	<td class="name" nowrap><a href="#path_canonicalize">path_canonicalize&nbsp;(f)</a></td>
+	<td class="summary">Canonicalize a path name.</td>
 	</tr>
 </table>
 <h2><a href="#Class_process">Class process</a></h2>
@@ -2107,7 +2059,9 @@ This is a wrapper for <code>g_unichar_get_mirror_char()</code>.
     </dt>
     <dd>
     Find ISO 15924 script for a Unicode character.
-This is a wrapper for <code>g_unichar_get_script()</code>.
+This is a wrapper for <code>g_unichar_get_script()</code>.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -2869,7 +2823,9 @@ hmac = hmacf()</pre>
     </dt>
     <dd>
     Compute secure HMAC digest using MD5.
-This is a wrapper for <code>g_hmac_new()</code> and friends.
+This is a wrapper for <code>g_hmac_new()</code> and friends.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -2899,7 +2855,9 @@ This is a wrapper for <code>g_hmac_new()</code> and friends.
     </dt>
     <dd>
     Compute secure HMAC digest using SHA1.
-This is a wrapper for <code>g_hmac_new()</code> and friends.
+This is a wrapper for <code>g_hmac_new()</code> and friends.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -2929,7 +2887,9 @@ This is a wrapper for <code>g_hmac_new()</code> and friends.
     </dt>
     <dd>
     Compute secure HMAC digest using SHA256.
-This is a wrapper for <code>g_hmac_new()</code> and friends.
+This is a wrapper for <code>g_hmac_new()</code> and friends.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -3078,7 +3038,9 @@ This is a wrapper for <code>NC_()</code>.  It resides in the global symbol table
     <dd>
     Obtain list of valid locale names.
 This is a wrapper for <code>g_get_locale_variants()</code> and
-<code>g_get_language_names()</code>.
+<code>g_get_language_names()</code>.</p>
+
+<p>This is only available with GLib 2.28 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -3682,313 +3644,39 @@ end
     </ul>
 </dd>
     <dt>
-    <a name = "format_size"></a>
-    <strong>format_size&nbsp;(size[, pow2[, long]])</strong>
+    <a name = "path_canonicalize"></a>
+    <strong>path_canonicalize&nbsp;(f)</strong>
     </dt>
     <dd>
-    Print sizes in scientific notation.
-This is a wrapper for <code>g_format_size_full()</code>.
+    Canonicalize a path name.
+This does not wrap anything in GLib, as GLib does not provide such a function.
+This function converts a path name to an absolute path name with all relative
+path references (i.e., . and ..) removed and symbolic links resolved.
+Additional steps are taken on Windows in an attempt to resolve the myriad of
+ways a path name may be specified, including short-to-long name conversion,
+case normalization (for path elements which exist), and UNC format
+consolidation.
+Note that there are several unresolvable issues:  On Windows, there may
+be host names in the path, which are hard to resolve even with DNS.  Also,
+both Windows and UNIX might have a the same path mounted in two different
+places, and sometimes it&rsquo;s hard to tell that they are the same (and no extra
+effort is put into checking, either).
 
     <h3>Parameters:</h3>
     <ul>
-       <li><code><em>size</em></code>: <strong>number</strong>  The size to format</li>
-       <li><code><em>pow2</em></code>: <strong>boolean</strong>  Set to true to use power-of-2 units rather
- than power-of-10 units.</li>
-       <li><code><em>long</em></code>: <strong>boolean</strong>  Set to true to display the full size, in
- parentheses, after the short size.</li>
+       <li><code><em>f</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The file name</li>
     </ul>
 
 
     <h3>Returns:</h3>
     <ol>
-        <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> A string representing the size with SI units
-    </ol>
-
-
-</dd>
-    <dt>
-    <a name = "find_program_in_path"></a>
-    <strong>find_program_in_path&nbsp;(p)</strong>
-    </dt>
-    <dd>
-    Locate an executable using the operating system&rsquo;s search method.
-This is a wrapper for <code>g_find_program_in_path()</code>.
-
-    <h3>Parameters:</h3>
-    <ul>
-       <li><code><em>p</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a>  The program name to find</li>
-    </ul>
-
-
-    <h3>Returns:</h3>
-    <ol>
-        <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> An absolute path to the program.
+        <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> The canonicalized file name.  Note that on Windows, the
+ canonical name always uses backslashes for directory separators.
     </ol>
 
     <h3>Raises:</h3>
-    Returns <code>nil</code> if <em>p</em> can&rsquo;t be  found.
+    Returns <code>nil</code> followed by an error message if there is a problem
 
-</dd>
-    <dt>
-    <a name = "qsort"></a>
-    <strong>qsort&nbsp;(t[, cmp])</strong>
-    </dt>
-    <dd>
-    Sort a table using a stable quicksort algorithm.
-This is a wrapper for <code>g_qsort_with_data()</code>.  This sorts a table
-in-place the same way as <a href="http://www.lua.org/manual/5.1/manual.html#pdf-table.sort">table.sort</a>  does, but it performs an extra
-comparison if necessary to determine of two elements are equal (i.e.,
-<em>cmp</em>(a, b) == <em>cmp</em>(b, a) == false).  If so, they are sorted in the
-order they appeared in the original table.  The extra comparison can be
-avoided by returning a number instead of a boolean from the comparison
-function; in this case, the number&rsquo;s relationship with 0 indicates a&rsquo;s
-relationship with b.
-
-    <h3>Parameters:</h3>
-    <ul>
-       <li><code><em>t</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.5">table</a>  Table to sort</li>
-       <li><code><em>cmp</em></code>: <strong>function</strong>  Function to use for comparison; takes two
- table elements and returns true if the first is less than the second.  If
- not specified, Lua&rsquo;s standard less-than operator is used.  The function
- may also return an integer instead of a boolean, in which case the number
- must be 0, less than 0, or greater than 0, indicating a is equal to, less
- than, or greater than b, respectively.</li>
-    </ul>
-
-
-
-
-    <h3>see also:</h3>
-    <ul>
-         <li><a href="lua-glib.html#utf8_collate">utf8_collate</a></li>
-         <li><a href="lua-glib.html#cmp">cmp</a></li>
-    </ul>
-</dd>
-    <dt>
-    <a name = "cmp"></a>
-    <strong>cmp&nbsp;(a, b)</strong>
-    </dt>
-    <dd>
-    Compare two objects.
-This function returns the difference between two objects.  If the <em>sub</em>
-operation is available in the first object&rsquo;s metatable, that is called.
-Otherwise, if both parameters are numbers, they are subtracted.  Otherwise,
-if they are both strings, they are byte-wise compared and their relative
-order is returned.  Finally, as a last resort, the standard less-than
-operator is used, possibly twice, to indicate relative order.
-
-    <h3>Parameters:</h3>
-    <ul>
-       <li><code><em>a</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  The first object</li>
-       <li><code><em>b</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> |<strong>number</strong>  The second object</li>
-    </ul>
-
-
-    <h3>Returns:</h3>
-    <ol>
-        <strong>integer</strong> Greater than zero if <em>a</em> is greater than <em>b</em>; less than
- zero if <em>a</em> is less than <em>b</em>; zero if <em>a</em> is equal to <em>b</em>.
-    </ol>
-
-
-    <h3>see also:</h3>
-    <ul>
-         <a href="lua-glib.html#utf8_collate">utf8_collate</a>
-    </ul>
-</dd>
-</dl>
-    <h2><a name="Timers"></a>Timers</h2>
-    
-    <dl class="function">
-    <dt>
-    <a name = "timer_new"></a>
-    <strong>timer_new&nbsp;()</strong>
-    </dt>
-    <dd>
-    Create a stopwatch-like timer.
-This is a wrapper for <code>g_timer_new()</code>.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-        <a href="lua-glib.html#Class_timer">timer</a> A timer object
-    </ol>
-
-
-</dd>
-</dl>
-    <h2><a name="Class_timer"></a>Class timer</h2>
-    
-    <dl class="function">
-    <dt>
-    <a name = "timer:start"></a>
-    <strong>timer:start&nbsp;()</strong>
-    </dt>
-    <dd>
-    Start or reset the timer.
-This is a wrapper for <code>g_timer_start()</code>.
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "timer:stop"></a>
-    <strong>timer:stop&nbsp;()</strong>
-    </dt>
-    <dd>
-    Stop the timer if it is running.
-This is a wrapper for <code>g_timer_stop()</code>.
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "timer:continue"></a>
-    <strong>timer:continue&nbsp;()</strong>
-    </dt>
-    <dd>
-    Resume the timer if it is stopped.
-This is a wrapper for <code>g_timer_continue()</code>.
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "timer:elapsed"></a>
-    <strong>timer:elapsed&nbsp;()</strong>
-    </dt>
-    <dd>
-    Return the amount of time counted so far.
-This is a wrapper for <code>g_timer_elapsed()</code>.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-        <strong>number</strong> The time counted so far, in seconds.
-    </ol>
-
-
-</dd>
-</dl>
-    <h2><a name="Spawning_Processes"></a>Spawning Processes</h2>
-    
-    <dl class="function">
-    <dt>
-    <a name = "spawn"></a>
-    <strong>spawn&nbsp;(args)</strong>
-    </dt>
-    <dd>
-    Run a command asynchronously.
-This is a wrapper for <code>g_spawn_async_with_pipes()</code>.  The other spawn
-functions can easily be emulated using this.
-
-    <h3>Parameters:</h3>
-    <ul>
-       <li><code><em>args</em></code>: <a href="http://www.lua.org/manual/5.1/manual.html#5.5">table</a> |<a href="http://www.lua.org/manual/5.1/manual.html#5.4">string</a> <p> If the parameter is a string, parse the string
-as a shell command and execute it.  Otherwise, the command is taken from
-the table.  If the table has no array component, the command must be
-specified using the <em>cmd</em> field.  Otherwise, the array elements specify
-the argument vector of the command.  If both are provided, the command
-to actually execute is <em>cmd</em>, but the first array element is still
-passed in as the proposed process name.  In addition to the command arguments
-and <em>cmd</em> field, the following fields specify options for the spawned
-command:</p>
-
-<dl>
-<dt><strong>stdin</strong>: file|string|boolean (default = false)</dt>
-<dd> Specify the standard
- input to the process.  If this is a file descriptor, it must
- be opened in read mode; its contents will be the process'
- standard input.  If this is a string, it names a file to
- be opened for reading.  The file name may be blank to indicate
- that the standard input should be inherited from the current
- process.  The file name may be prefixed with an exclamation
- point to open in binary mode; otherwise it is opened in
- normal (text) mode.  Any other value is evaluated as a
- boolean; true means that a pipe should be opened such that
- proc:write() writes to the process, and false means that
- no standard input should be provided at all (equivalent to
- UNIX /dev/null).</dd>
-<dt><strong>stdout</strong>: file|string|boolean (default = true)</dt>
-<dd> Specify the standard
- output for the process.  If this is a file descriptor, it must
- be opened in write mode; the process' standard output will be
- written to that file.  If this is a string, it names a file to
- be opened for appending.  The file name may be blank to indicate
- that the standard output should be inherited from the current
- process.  The file name may be prefixed with an exclamation
- point to open in binary mode; otherwise it is opened in
- normal (text) mode.  Any other value is evaluated as a
- boolean; true means that a pipe should be opened such that
- proc:read() reads from the process, and false means that
- standard output should be ignored.</dd>
-<dt><strong>stderr</strong>: file|string|boolean (default = &ldquo;&rdquo;)</dt>
-<dd> Specify the standard
- error for the process.  See the <strong>stdout</strong> description for
- details; the only difference is in which functions are used
- to read from the pipe (read_err and friends).</dd>
-<dt><strong>env</strong>: table</dt>
-<dd> Specify the environment for the process.  If this
- is not provided, the environment is inherited from the parent.
- Otherwise, all keys in the table correspond to variables, and
- the values correspond to those variables' values.  Only these
- variables will be set in the spawned process.</dd>
-<dt><strong>path</strong>: boolean (default = true)</dt>
-<dd> If this is present and false, do
- not use the standard system search path to find the command
- to execute.</dd>
-<dt><strong>chdir</strong>: string</dt>
-<dd> If this is present, change to the given directory
- when executing the commmand.  Otherwise, it will execute in the
- current working directory.</dd>
-<dt><strong>cmd</strong>: string</dt>
-<dd> If this is present, and there are no array entries in
- this table, it is parsed as a shell command to construct the
- command to run.  Otherwise, it is the command to execute instead
- of the first element of the argument array.</dd>
-</dl></li>
-    </ul>
-
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example">-- fully quoted arguments
-p = glib.spawn {'cat', f}
-f_cont = p:wait()
-
--- generic command line; parsed by glib rather than shell so relatively safe
-p = glib.spawn(cmd='cat /tmp/xyz')
-xyz_cont = p:wait()
-
--- fully quoted arguments, but with renamed argv[0] if supported
-p = glib.spawn('concatenate', f, cmd='/bin/cat')
-f_cont = p:wait()
-
--- write output to a file
--- more portable than tacking >file to the command
-of = open('/tmp/of', 'w')
-p = glib.spawn('cat', f, stdout=of)
-p:wait()
-of:close()</pre>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-        <a href="lua-glib.html#Class_process">process</a> An object representing the process.
-    </ol>
-
-
-    <h3>see also:</h3>
-    <ul>
-         <a href="lua-glib.html#shell_parse_argv">shell_parse_argv</a>
-    </ul>
 </dd>
 </dl>
     <h2><a name="Class_process"></a>Class process</h2>
@@ -4632,7 +4320,9 @@ This is a wrapper for <code>g_mkdir_with_parents()</code>.
     <dd>
     Create a unique tempoarary directory from a pattern.
 This is a wrapper for <code>g_mkdtemp</code>.  It replaces 6 consecutive Xs in the
-pattern with a unique string and creates a directory by that name.
+pattern with a unique string and creates a directory by that name.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
@@ -4660,7 +4350,9 @@ pattern with a unique string and creates a directory by that name.
     Create a unique temporary directory in the standard temporary directory.
 This is a wrapper for <code>g_dir_make_tmp()</code>.  It creates a new, unique
 directory in the standard temporary directory by replacing 6 consecutive
-Xs in the template.
+Xs in the template.</p>
+
+<p>This is only available with GLib 2.30 or later.
 
     <h3>Parameters:</h3>
     <ul>
