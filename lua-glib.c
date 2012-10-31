@@ -140,7 +140,7 @@ int luaopen_glib(lua_State *L);
 
 #ifdef _MSC_VER
 #include <io.h>
-/* MS VS 2005 deprecatesregular versions in favor of _ versions */
+/* MS VS 2005 deprecates regular versions in favor of _ versions */
 #if _MSC_VER >= 1400
 #undef dup
 #define dup _dup
@@ -160,8 +160,13 @@ static int win_umask(int m)
     return m;
 }
 #endif
-#else
+#endif
+
+#ifdef G_OS_UNIX
 #include <unistd.h>
+#endif
+#ifdef G_OS_WIN32
+#include <wchar.h>
 #endif
 
 /* 5.1/5.2 compatibility */
@@ -2459,6 +2464,339 @@ static int glib_build_path(lua_State *L)
     return 1;
 }
 
+/**
+Canonicalize a path name.
+This does not wrap anything in GLib, as GLib does not provide such a function.
+This function converts a path name to an absolute path name with all relative
+path references (i.e., . and ..) removed and symbolic links resolved.
+Additional steps are taken on Windows in an attempt to resolve the myriad of
+ways a path name may be specified, including short-to-long name conversion,
+case normalization (for path elements which exist), and UNC format
+consolidation.
+Note that there are several unresolvable issues:  On Windows, there may
+be host names in the path, which are hard to resolve even with DNS.  Also,
+both Windows and UNIX might have a the same path mounted in two different
+places, and sometimes it's hard to tell that they are the same (and no extra
+effort is put into checking, either).
+@function path_canonicalize
+@tparam string f The file name
+@treturn string The canonicalized file name.  Note that on Windows, the
+ canonical name always uses backslashes for directory separators.
+@raise Returns `nil` followed by an error message if there is a problem
+*/
+static int glib_path_canonicalize(lua_State *L)
+{
+    const char *path = luaL_checkstring(L, 1);
+#ifdef G_OS_UNIX
+    /* realpath(3) is unusable.  Some versions may not accept NULL as a
+     * second parameter, and do not necessarily use PATH_MAX as the max
+     * for the second parameter, either.  Also, realpath only works on
+     * existing files, so may as well just forget it and do it manually
+     */
+    /* first, make the path absolute */
+    GString *act;
+    if(*path != '/') {
+	gchar *cwd = g_get_current_dir();
+	act = g_string_new(cwd);
+	if(act->str[act->len - 1] != '/')
+	    g_string_append_c(act, '/');
+	g_string_append(act, path);
+    } else
+	act = g_string_new(path);
+    /* next, iterate over path elements, resolving soft links if needed */
+    {
+	int pos;
+	int nsym_resolv = 0;
+	while(pos < act->len) {
+	    int lpos;
+	    gchar *link;
+	    /* remove duplicate / */
+	    for(lpos = pos; act->str[lpos + 1] == '/'; lpos++);
+	    if(lpos != pos)
+		g_string_erase(act, pos, lpos - pos);
+	    /* strip final trailing / */
+	    if(!act->str[pos + 1]) {
+		if(pos)
+		    g_string_truncate(act, pos);
+		break;
+	    }
+	    ++pos;
+	    /* remove . */
+	    if(act->str[pos] == '.' && (!act->str[pos + 1] || act->str[pos + 1] == '/')) {
+		if(--pos > 0 || act->len > 2)
+		    g_string_erase(act, pos, 2);
+		else {
+		    g_string_truncate(act, 1);
+		    break;
+		}
+		continue;
+	    }
+	    /* remove .. */
+	    if(act->str[pos] == '.' && act->str[pos + 1] == '.' &&
+	       (!act->str[pos + 2] || act->str[pos + 2] == '/')) {
+		for(lpos = pos - 2; lpos > 0 && act->str[lpos] != '/'; lpos--);
+		if(lpos < 0)
+		    /* can't go past root; just wipe .. */
+		    g_string_erase(act, --pos, 3);
+		else {
+		    /* otherwise, wipe .. and previous path element */
+		    g_string_erase(act, lpos, pos - lpos + 2);
+		    pos = lpos;
+		}
+		if(!act->len) {
+		    g_string_assign(act, "/");
+		    break;
+		}
+		continue;
+	    }
+	    /* resolve symlink */
+	    {
+		char *sl = strchr(act->str + pos, '/');
+		lpos = sl ? sl - act->str : 0;
+	    }
+	    if(lpos)
+		act->str[lpos] = 0;
+	    if(g_file_test(act->str, G_FILE_TEST_IS_SYMLINK)) {
+		link = g_file_read_link(act->str, NULL);
+		if(!link) {
+		    int en = errno;
+		    lua_pushnil(L);
+		    lua_pushstring(L, strerror(en));
+		    lua_pushnumber(L, en);
+		    g_string_free(act, TRUE);
+		    return 3;
+		}
+	    } else
+		link = NULL;
+	    if(lpos)
+		act->str[lpos] = '/';
+	    else
+		lpos = act->len;
+	    if(link) {
+		/* FIXME: not a very good way to detect loops; should actually */
+		/* save path names of found symlinks and barf if repeated */
+		if(++nsym_resolv > 100) {
+		    lua_pushnil(L);
+#ifdef ELOOP
+		    lua_pushstring(L, strerror(ELOOP));
+#else
+		    pushliteral(L, "Symbolic link loop");
+#endif
+		    g_string_free(act, TRUE);
+		    return 2;
+		}
+		if(*link == '/') {
+		    /* absolute links replace entire path to end of link name */
+		    g_string_erase(act, 0, lpos);
+		    g_string_insert(act, 0, link);
+		    /* and require restart from beginning of path */
+		    pos = 0;
+		} else {
+		    /* relative links just replace link name */
+		    g_string_erase(act, pos, lpos - pos);
+		    g_string_insert(act, pos, link);
+		    /* and require restart from start of link text */
+		    --pos;
+		}
+		continue;
+	    }
+	    /* non-link path elements just continue at next element */
+	    pos = lpos;
+	}
+	lua_pushstring(L, act->str);
+	g_string_free(act, TRUE);
+	return 1;
+    }
+#endif
+#ifdef G_OS_WIN32
+    wchar_t *wp = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+    size_t pl;
+    wchar_t *wfp;
+
+    if(!wp) {
+	lua_pushnil(L);
+	lua_pushliteral(L, "Invalid UTF-8");
+	return 2;
+    }
+    /* just to be safe, convert all / to \ */
+    for(wfp = wp; *wfp; wfp++)
+	if(*wfp == '/')
+	    *wfp = '\\';
+    /* now, try the easy way: if the file exists, it should be possible */
+    /* to use GetFileInformationByHandle */
+    {
+	static gboolean got_fpbh = FALSE;
+	static DWORD (CALLBACK *getpathbyhand)(HANDLE, LPWSTR, DWORD, DWORD);
+	if(!got_fpbh) {
+	    HINSTANCE k32 = GetModuleHandle("KERNEL32");
+	    got_fpbh = TRUE;
+	    *(FARPROC *)&getpathbyhand = GetProcAddress(k32, "GetFinalPathNameByHandleW");
+	}
+	if(getpathbyhand) {
+	    HANDLE f = CreateFileW(wp, 0, 0, 0, 0, 0, 0);
+	    if(f != INVALID_HANDLE_VALUE) {
+		/* VOLUME_NAME_GUID could be used to make it truly indep. */
+		size_t len = getpathbyhand(f, NULL, 0, 0);
+		if(len > 0) {
+		    wchar_t *ret16 = g_malloc(len * sizeof(*ret16));
+		    char *ret;
+		    len = getpathbyhand(f, ret16, len, 0);
+		    CloseHandle(f);
+		    ret = g_utf16_to_utf8(ret16, -1, NULL, NULL, NULL);
+		    g_free(ret16);
+		    lua_pushstring(L, ret);
+		    g_free(ret);
+		    return 1;
+		}
+		CloseHandle(f);
+	    }
+	}
+    }
+    /* otherwise, the hard way, adapted from */
+    /* http://pdh11.blogspot.com/2009/05/pathcanonicalize-versus-what-it-says-on.html */
+
+    /** Note that PathCanonicalize does NOT do what we want here -- it's a
+     * purely textual operation that eliminates /./ and /../ only.
+     */
+    pl = GetFullPathNameW(wp, 0, NULL, NULL);
+    if(!pl) {
+	char *msg = g_win32_error_message(GetLastError());
+	lua_pushnil(L);
+	lua_pushstring(L, msg);
+	g_free(msg);
+	g_free(wp);
+	return 2;
+    }
+    wfp = g_malloc(pl * sizeof(*wfp));
+    pl = GetFullPathNameW(wp, pl, wfp, NULL);
+    g_free(wp);
+    wp = wfp;
+
+    if(wp[0] == '\\' && wp[1] == '\\') {
+        /** Get rid of \\?\ and \\.\ prefixes on drive-letter paths */
+	if((wp[2] == '?' || wp[2] == '.') && wp[3] == '\\' &&
+	   wp[5] == ':')
+	    wp += 4;
+	else if(!wcsncmp(wp + 2, L"?\\UNC\\", 6)) {
+	    /** Get rid of \\?\UNC on drive-letter and UNC paths */
+	    if(wp[9] == ':' && wp[10] == '\\')
+		wp += 8;
+	    else {
+		wp += 6;
+		*wp = '\\';
+	    }
+	} else if(wp[2] == '?' || wp[2] == '.') {
+    /** Anything other than UNC and drive-letter is something we don't
+     * understand
+     */
+	    lua_pushnil(L);
+	    lua_pushliteral(L, "Incomprehensible UNC path");
+	    return 2;
+	}
+    }
+    /* at this point, the path should either be \\... or <drive>:\... */
+    if(*wp == '\\')
+        /** OK -- UNC */;
+    else if (g_ascii_isalpha(*wp) && *wp < 256 && wp[1] == ':') {
+        /** OK -- drive letter -- unwind subst'ing */
+	wchar_t *buf;
+	int buflen = 16;
+	buf = g_malloc(16 * sizeof(*buf));
+        for (;;)
+        {
+            wchar_t drive[3];
+            drive[0] = (wchar_t)toupper(*wp);
+            drive[1] = ':';
+            drive[2] = 0;
+	    while(1) {
+		pl = QueryDosDeviceW(drive, buf, buflen);
+		if(pl || GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+		    break;
+		buflen *= 2;
+		buf = g_realloc(buf, buflen * sizeof(*buf));
+	    }
+            if (!pl)
+                break;
+	    /* wtf?  yet another weird path specifier? */
+            if (!wcsncmp(buf, L"\\??\\", 4)) {
+		/* blen can't be pl, since there may be more than one */
+		/* return string in buf */
+		int blen = wcslen(buf + 4);
+		pl = wcslen(wp + 2);
+		wfp = g_malloc(pl + blen + 1);
+		memcpy(wfp, buf + 4, blen * sizeof(*buf));
+		memcpy(wfp + blen, wp + 2, (pl + 1) * sizeof(*buf));
+		g_free(wp);
+		wp = wfp;
+            } else /* Not subst'd */
+                break;
+        }
+
+	{
+	    wchar_t drive[4];
+	    int ret;
+	    drive[0] = (wchar_t)toupper(*wp);
+	    drive[1] = ':';
+	    drive[2] = '\\';
+	    drive[3] = 0;
+
+	    ret = GetDriveTypeW(drive);
+
+	    if (ret == DRIVE_REMOTE) {
+		DWORD bufsize;
+
+		/* QueryDosDevice and WNetGetConnection FORBID the
+		 * trailing slash; GetDriveType REQUIRES it.
+		 */
+		drive[2] = '\0';
+
+		bufsize = buflen;
+		ret = WNetGetConnectionW(drive, buf, &bufsize);
+		if(ret == ERROR_MORE_DATA) {
+		    buflen = bufsize;
+		    buf = g_realloc(buf, buflen * sizeof(*buf));
+		    ret = WNetGetConnectionW(drive, buf, &bufsize);
+		}
+		if (ret == NO_ERROR) {
+		    int blen = wcslen(buf);
+		    pl = wcslen(wp + 2);
+		    wfp = g_malloc(pl + blen + 1);
+		    memcpy(wfp, buf, blen * sizeof(*buf));
+		    memcpy(wfp + blen, wp + 2, (pl + 1) * sizeof(*buf));
+		    g_free(wp);
+		    wp = wfp;
+		}
+	    }
+	}
+	g_free(buf);
+    }
+
+    {
+	/** Canonicalise case and 8.3-ness */
+	pl = GetLongPathNameW(wp, NULL, 0);
+	if(!pl) {
+	    char *msg = g_win32_error_message(GetLastError());
+	    lua_pushnil(L);
+	    lua_pushstring(L, msg);
+	    g_free(msg);
+	    g_free(wp);
+	    return 2;
+	}
+	wfp = g_malloc(pl * sizeof(*wfp));
+	GetLongPathNameW(wp, wfp, pl);
+	g_free(wp);
+	wp = wfp;
+    }
+
+    {
+	char *ret = g_utf16_to_utf8(wp, -1, NULL, NULL, NULL);
+	lua_pushstring(L, ret);
+	g_free(ret);
+	return 1;
+    }
+#endif
+}
+
 /***
 Print sizes in scientific notation.
 This is a wrapper for `g_format_size_full()`.
@@ -4731,6 +5069,7 @@ static void push_type(lua_State *L, int mode)
     }
 }
 
+#ifdef G_OS_UNIX
 static void push_owner(lua_State *L, int uid)
 {
     struct passwd *pw = getpwuid(uid);
@@ -4748,6 +5087,7 @@ static void push_group(lua_State *L, int gid)
     else
 	lua_pushnumber(L, gid);
 }
+#endif
 
 static void push_mode(lua_State *L, int mode)
 {
@@ -4868,7 +5208,7 @@ static int glib_stat(lua_State *L)
 		FindClose(find_data_handle);
 	    }
 	    if(islink)
-		st->st_mode = (st->st_mode &~S_IFMT) | S_IFLNK;
+		sbuf.st_mode = (sbuf.st_mode &~S_IFMT) | S_IFLNK;
 	}
 #endif
     } else
@@ -5217,7 +5557,7 @@ static int glib_link(lua_State *L)
     return 1;
 #endif
 #ifdef G_OS_WIN32
-    wchat_t *fw, *tw;
+    wchar_t *fw, *tw;
     tw = g_utf8_to_utf16(t, -1, NULL, NULL, NULL);
     if(!fw) {
 	lua_pushboolean(L, FALSE);
@@ -5250,14 +5590,15 @@ static int glib_link(lua_State *L)
 	ret = CreateHardLinkW(fw, tw, NULL);
     g_free(tw);
     g_free(fw);
-    if(ret)
-	lua_pushboolean(L, ret);
-    else {
+    if(!ret) {
 	char *msg = g_win32_error_message(GetLastError());
 	lua_pushboolean(L, FALSE);
 	lua_pushstring(L, msg);
 	g_free(msg);
+	return 2;
     }
+    lua_pushboolean(L, ret);
+    return 1;
 #endif
 #if !defined(G_OS_UNIX) && !defined(G_OS_WIN32)
     lua_pushboolean(L, FALSE);
@@ -9065,6 +9406,7 @@ static luaL_Reg lua_funcs[] = {
     fent(path_get_dirname),
     fent(build_filename),
     fent(build_path),
+    fent(path_canonicalize),
     fent(format_size),
     fent(find_program_in_path),
     /* bit ops not worth supporting; better to add them to lua-bit */
