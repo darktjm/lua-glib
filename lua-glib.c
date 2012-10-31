@@ -2281,6 +2281,8 @@ This is a wrapper for `g_path_skip_root()`.
  `nil`.
 @treturn string The non-root part
 */
+/* APR is much more sophisticated about this */
+/* it handles //?/drive/... and /?/UNC/... names consistently and correctly */
 static int glib_path_split_root(lua_State *L)
 {
     const gchar *s = luaL_checkstring(L, 1);
@@ -2297,11 +2299,15 @@ static int glib_path_split_root(lua_State *L)
 /***
 Obtain the last element of a path.
 This is a wrapper for `g_path_get_basename()`.
+Note that if the last element of a path is blank, this may return the
+second-to-last element.  Also, if this is simply a directory separator,
+the directory separator is returned.  In other words, it is not possible
+to reconstruct the original file name by appending results from this
+function.
 @function path_get_basename
 @tparam string d The path to split
 @treturn string The last path element of the path
 */
-/* note that cmorris rejected the result if it was ., / , or \ */
 static int glib_path_get_basename(lua_State *L)
 {
     gchar *s = g_path_get_basename(luaL_checkstring(L, 1));
@@ -2313,11 +2319,14 @@ static int glib_path_get_basename(lua_State *L)
 /***
 Obtain all but the last element of a path.
 This is a wrapper for `g_path_dirname()`.
+Note that if there is no parent element, and the path is relative, . may be
+returned.  If the path is absolute, the absolute prefix may be returned
+even if it is the only element present.  If there is a terminating directory
+separator, this may return the same path element as `path_get_basename`.
 @function path_get_dirname
 @tparam string d The path to split
 @treturn string All but the last element of the path.
 */
-/* note that cmorris rejected the result if it was . */
 static int glib_path_get_dirname(lua_State *L)
 {
     gchar *s = g_path_get_dirname(luaL_checkstring(L, 1));
@@ -2373,17 +2382,25 @@ Construct a file name from its path constituents.
 This is a wrapper for `g_build_filenamev()`.  There is no inverse operation,
 but it can be implemented in Lua:
 
+    -- assumes multiple consecutive directory separators are the same as
+    -- just one separator (true on non-root in Windows and everywhere in UNIX)
+    -- but as a counterexample, AmigaOS has no . and .., but instead uses
+    -- blank to mean both:
+    --    "" == UNIX .  "/x" == ../x "x///y" == UNIX x/../../y
     function split_filename(f)
         local res = {}
         local r
         r, f = glib.path_split_root(f)
-        while f ~= '' do
-            local b = glib.path_get_basename(f)
-            table.insert(res, 1, b)
-            if b == f then break end
-            f = glib.path_get_dirname(f)
+        -- note: it may be a good idea to trim r as well:
+        --  convert ^[dir_sep]+$ to dir_sep[0] (strip duplicate dir_sep)
+        --  convert ^([^dir_sep].*?)[dir_sep]*$ to \1 (stip trailing dir_sep)
+        local rx = glib.regex_new('[' .. glib.regex_escape_string(glib.dir_separator) .. ']')
+        local i, e, laste
+        for i, e in ipairs(rx:split(f)) do
+            if e ~= '' then table.insert(res, e) end
+            laste = e
         end
-        return r, res
+        if laste == '' then table.insert(res, '') end
     end
 @function build_filename
 @tparam {string,...}|string,... ... If the first parameter is a table, this
@@ -4130,6 +4147,7 @@ they follow symbolic links.
 @tparam string name The path name to test
 @treturn boolean true if *name* names a symbolic link
 */
+/* FIXME: support symlink in Windows (not sure how) */
 file_test(IS_SYMLINK, is_symlink)
 /***
 Test if the given path points to an executable file.
@@ -4782,6 +4800,7 @@ points to.
 @raise Returns `nil` and error message string on error.
 */
 /* FIXME: support nanosecond time stamps (no portable way to detect) */
+/* FIXME: support symlink in Windows (not sure how) */
 static int glib_stat(lua_State *L)
 {
     const char *n = luaL_checkstring(L, 1);
@@ -5129,6 +5148,88 @@ static int glib_utime(lua_State *L)
     }
     lua_pushboolean(L, 1);
     return 1;
+}
+
+/***
+Create a link.
+This is not a wrapper for any GLib function, since GLib does not support
+links portably.  It creates a hard link or soft link, if supported.  Note
+that on Windows, whether or not the target is a directory must be known at
+link creation time.  This is discovered by checking the target.
+@function link
+@tparam string target The link's target
+@tparam string name The name of the link to create
+@tparam[opt] boolean soft If true, create a soft link
+@treturn boolean True
+@raise Returns False and an error message string on failure
+*/
+static int glib_link(lua_State *L)
+{
+    const char *t = luaL_checkstring(L, 1);
+    const char *f = luaL_checkstring(L, 2);
+    gboolean soft = lua_toboolean(L, 3);
+    int ret;
+#ifdef G_OS_UNIX
+    if(soft)
+	ret = symlink(t, f);
+    else
+	ret = link(t, f);
+    if(ret < 0) {
+	int en = errno;
+	lua_pushboolean(L, FALSE);
+	lua_pushstring(L, strerror(en));
+	lua_pushnumber(L, en);
+	return 3;
+    }
+    lua_pushboolean(L, TRUE);
+    return 1;
+#endif
+#ifdef G_OS_WINDOWS
+    wchat_t *fw, *tw;
+    tw = g_utf8_to_utf16(t -1, NULL, NULL, NULL);
+    if(!fw) {
+	lua_pushboolean(L, FALSE);
+	lua_pushliteral(L, "Invalid Unicode target");
+	return 2;
+    }
+    fw = g_utf8_to_utf16(f -1, NULL, NULL, NULL);
+    if(!fw) {
+	g_free(tw);
+	lua_pushboolean(L, FALSE);
+	lua_pushliteral(L, "Invalid Unicode link name");
+	return 2;
+    }
+    if(soft) {
+	static gboolean did_check = FALSE;
+	static DWORD (CALLBACK *win_symlink)(LPWSTR, LPWSTR, DWORD);
+	if(!did_check) {
+	    HINSTANCE k32 = GetModuleHandle("KERNEL32");
+	    did_check = TRUE;
+	    *(FARPROC *)&win_symlink = GetProcAddress(k32, "CreateSymbolicLinkW");
+	}
+	if(!win_symlink) {
+	    lua_pushboolean(L, FALSE);
+	    lua_pushliteral(L, "No CreateSymbolicLinkW available");
+	    return 2;
+	}
+	ret = win_symlink(fw, tw, g_file_test(t, G_FILE_TEST_IS_DIR));
+    } else
+	/* maybe it would be safer to check if avail first as well... */
+	ret = CreateHardLinkW(fw, tw, NULL);
+    if(ret)
+	lua_pushboolean(L, ret);
+    else {
+	char *msg = g_win32_error_message(GetLastError());
+	lua_pushboolean(L, FALSE);
+	lua_pushstring(L, msg);
+	g_free(msg);
+    }
+#endif
+#if !defined(G_OS_UNIX) && !defined(G_OS_WINDOWS)
+    lua_pushboolean(L, FALSE);
+    lua_pushliteral(L, "linking not supported")
+    return 2;
+#endif
 }
 
 /*********************************************************************/
@@ -8973,6 +9074,7 @@ static luaL_Reg lua_funcs[] = {
     fent(can_write),
     fent(chdir),
     fent(utime),
+    fent(link),
     /* URI Functions */
     fent(uri_parse_scheme),
     fent(uri_escape_string),
@@ -9179,18 +9281,3 @@ int luaopen_glib(lua_State *L)
 #endif
     return 1;
 }
-
-#if 0
-static int glib_fs_basename(lua_State *L) {
-    gchar *base;
-    base = g_path_get_basename(luaL_checkstring(L, 1));
-    if(strcmp(base, ".") == 0 || strcmp(base, "/") == 0 || strcmp(base, "\\") == 0) {
-        lua_pushnil(L);
-    } else {
-        lua_pushstring(L, base);
-    }
-    free(base);
-    return 1;
-}
-
-#endif
