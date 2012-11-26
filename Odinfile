@@ -2,8 +2,15 @@ glib.so == %glib-so
 
 %glib-so == lua-glib.c +cc_flags=-fPIC -Werror +(%glib) +(%lua) +ld_flags=-shared +debug :exe
 
-lua-glib.html == (() +cmd='input=trim[['(lua-glib.c)']]' +cmdfile=(%mk-html) \
-                      :lua_stdout) +cmd='tidy||:' :stdout
+%glib-doc ! == <<
+  lua-glib.html
+  README.textile
+  ldoc.css
+
+%lua-ldoc == () +cmd='input=trim[['(lua-glib.c)']]' +cmdfile=(%mk-html) \
+                      :lua_output
+ldoc.css == %lua-ldoc/ldoc.css
+lua-glib.html == (%lua-ldoc/lua-glib.html) +cmd='tidy||:' :stdout
 %mk-html == <<
 os.execute('ldoc.lua -p lua-glib -o lua-glib -d . -f discount ' .. input)
 local l, lastl -- lastl is for lookahead

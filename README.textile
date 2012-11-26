@@ -14,7 +14,7 @@ The sections which are mostly supported are Version Information, Character Set C
 
 Eventually, this may be split into multiple modules, so that uselses stuff can be removed. However, removing useless stuff from GLib is not easy, so having Lua bindings for what's there is not necessarily harmful.
 
-This documentation was built as follows:
+This documentation was built as follows (again, this is in the Odinfile):
 
 bc.  ldoc.lua -p lua-glib -o lua-glib -d . -f discount -t 'Lua GLib Library' lua-glib.c
 
@@ -47,6 +47,8 @@ make DISCOUNT_OBJS= LIBS=-lmarkdown
 The "discount":http://www.pell.portland.or.us/~orc/Code/discount/ version I used was 2.1.5a, with everything enabled, and compiled with -fPIC to enable linking with shared libraries.
 
 Note that since LDoc does not support error return sections, I have used exception sections (&#64;raise) instead.
+
+For GitHub, I have converted this documentation to textile using pandoc and a bit of filtering. See the Lua filtering code in Odinfile; this almost certainly needs Odin for best results. I chose textile because markdown doesn't do tables (at least not in a way that's compatible with anything pandoc can produce). and all the other formats produced plain ASCII on GitHub, in spite of claims to the contrary at https://www.github.com/github/markdown/.
 
 Questions/comments to darktjm&#64;gmail.com.
 
@@ -449,13 +451,9 @@ h2. <a name="Version_Information"/>Version Information
 <dd><p>GLib version string. Version of running glib (not the one it was compiled against). The format is _major_._minor_._micro_.</p>
 h3. Usage:
 
-<blockquote>
-
 bc(example). gver = tonumber(glib.version:match '(.*)%.')
 print(gver > 2.30)
 
-
-</blockquote>
 </dd>
 </dl>
 
@@ -508,8 +506,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). c = glib.convert(nil, 'utf-8', 'latin1')
 while true do
   buf = inf:read(4096)
@@ -519,22 +515,12 @@ end
 outf:write(c())
 
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string</p>
 h3. see also:
 
-<blockquote>
-
-"convert":#convert
-</blockquote>
-</dd>
+<p>"convert":#convert</p></dd>
 <dt> <a name="convert"/>convert ([str[, to[, from[, fallback]]]])*</dt>
 <dd><p>Convert strings from one character set to another. This is a wrapper for @g_convert()@ and friends. To convert a stream, pass in no arguments or @nil@ for str. The return value is either the converted string, or a function matching the "&#95;convert&#95;":#_convert_ function.</p>
 h3. Parameters:
@@ -558,11 +544,7 @@ h3. Raises:
 <p>Returns @nil@ and error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;convert&#95;":#_convert_
-</blockquote>
-</dd>
+<p>"&#95;convert&#95;":#_convert_</p></dd>
 </dl>
 
 h2. <a name="Unicode_Manipulation"/>Unicode Manipulation
@@ -578,11 +560,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is valid
-</blockquote>
-
+<p>*boolean* True if _c_ is valid</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -596,11 +574,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is alphabetic
-</blockquote>
-
+<p>*boolean* True if _c_ is alphabetic</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -614,11 +588,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a control character
-</blockquote>
-
+<p>*boolean* True if _c_ is a control character</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -632,11 +602,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is defined
-</blockquote>
-
+<p>*boolean* True if _c_ is defined</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -650,11 +616,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a digit-like character
-</blockquote>
-
+<p>*boolean* True if _c_ is a digit-like character</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p>
@@ -675,11 +637,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a graphic character
-</blockquote>
-
+<p>*boolean* True if _c_ is a graphic character</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -693,11 +651,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is lower-case.
-</blockquote>
-
+<p>*boolean* True if _c_ is lower-case.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -711,11 +665,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a non-spacing mark, combining mark, or enclosing mark
-</blockquote>
-
+<p>*boolean* True if _c_ is a non-spacing mark, combining mark, or enclosing mark</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -729,11 +679,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is printable, even if blank
-</blockquote>
-
+<p>*boolean* True if _c_ is printable, even if blank</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -747,11 +693,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a punctuation or symbol character
-</blockquote>
-
+<p>*boolean* True if _c_ is a punctuation or symbol character</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -765,11 +707,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is whitespace
-</blockquote>
-
+<p>*boolean* True if _c_ is whitespace</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -783,11 +721,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is titlecase alphabetic
-</blockquote>
-
+<p>*boolean* True if _c_ is titlecase alphabetic</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -801,11 +735,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is upper-case alphabetic
-</blockquote>
-
+<p>*boolean* True if _c_ is upper-case alphabetic</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -819,11 +749,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a hexadecimal digit
-</blockquote>
-
+<p>*boolean* True if _c_ is a hexadecimal digit</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p>
@@ -844,11 +770,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is double-width
-</blockquote>
-
+<p>*boolean* True if _c_ is double-width</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -862,11 +784,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is double-width normally or in legacy East-Asian locales
-</blockquote>
-
+<p>*boolean* True if _c_ is double-width normally or in legacy East-Asian locales</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -880,11 +798,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _c_ is a zero-width combining character
-</blockquote>
-
+<p>*boolean* True if _c_ is a zero-width combining character</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -898,11 +812,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -916,11 +826,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -934,11 +840,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -952,21 +854,13 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The digit's numeric value
-</blockquote>
-
+<p>*number* The digit's numeric value</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8. Returns -1 if _c_ is not a digit.</p>
 h3. see also:
 
-<blockquote>
-
-"isdigit":#isdigit
-</blockquote>
-</dd>
+<p>"isdigit":#isdigit</p></dd>
 <dt> <a name="xdigit&#95;value"/>xdigit&#95;value ( c )*</dt>
 <dd><p>Convert hexadecimal digit to its numeric value. This is a wrapper for @g_unichar_xdigit_value()@.</p>
 h3. Parameters:
@@ -977,21 +871,13 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The hex digit's numeric value
-</blockquote>
-
+<p>*number* The hex digit's numeric value</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8. Returns -1 if _c_ is not a hex digit.</p>
 h3. see also:
 
-<blockquote>
-
-"isxdigit":#isxdigit
-</blockquote>
-</dd>
+<p>"isxdigit":#isxdigit</p></dd>
 <dt> <a name="type"/>type ( c )*</dt>
 <dd><p>Find Unicode character class. This is a wrapper for @g_unichar_type()@.</p>
 h3. Parameters:
@@ -1002,11 +888,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The character's class; one of: @control@, @format@, @unassigned@, @private_use@, @surrogate@, @lowercase_letter@, @modifier_letter@, @other_letter@, @titlecase_letter@, @uppercase_letter@, @spacing_mark@, @enclosing_mark@, @non_spacing_mark@, @decimal_number@, @letter_number@, @other_number@, @connect_punctuation@, @dash_punctuation@, @close_punctuation@, @final_punctuation@, @initial_punctuation@, @other_punctuation@, @open_punctuation@, @currency_symbol@, @modifier_symbol@, @math_symbol@, @other_symbol@, @line_separator@, @paragraph_separator@, @space_separator@.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The character's class; one of: @control@, @format@, @unassigned@, @private_use@, @surrogate@, @lowercase_letter@, @modifier_letter@, @other_letter@, @titlecase_letter@, @uppercase_letter@, @spacing_mark@, @enclosing_mark@, @non_spacing_mark@, @decimal_number@, @letter_number@, @other_number@, @connect_punctuation@, @dash_punctuation@, @close_punctuation@, @final_punctuation@, @initial_punctuation@, @other_punctuation@, @open_punctuation@, @currency_symbol@, @modifier_symbol@, @math_symbol@, @other_symbol@, @line_separator@, @paragraph_separator@, @space_separator@.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -1020,11 +902,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The line break classification; one of: @mandatory@, @carriage_return@, @line_feed@, @combining_mark@, @surrogate@, @zero_width_space@, @inseperable@, @non_breaking_glue@, @contingent@, @space@, @after@, @before@, @before_and_after@, @hyphen@, @non_starter@, @open_punctuation@, @close_punctuation@, @quotation@, @exclamation@, @ideographic@, @numeric@, @infix_separator@, @symbol@, @alphabetic@, @prefix@, @postfix@, @complex_context@, @ambiguous@, @unknown@, @next_line@, @word_joiner@, @hangul_l_jamo@, @hangul_v_jamo@, @hangul_t_jamo@, @hangul_lv_syllable@, @hangul_lvt_syllable@, @close_parenthesis@, @conditional_japanese_starter@, @hebrew_letter@.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The line break classification; one of: @mandatory@, @carriage_return@, @line_feed@, @combining_mark@, @surrogate@, @zero_width_space@, @inseperable@, @non_breaking_glue@, @contingent@, @space@, @after@, @before@, @before_and_after@, @hyphen@, @non_starter@, @open_punctuation@, @close_punctuation@, @quotation@, @exclamation@, @ideographic@, @numeric@, @infix_separator@, @symbol@, @alphabetic@, @prefix@, @postfix@, @complex_context@, @ambiguous@, @unknown@, @next_line@, @word_joiner@, @hangul_l_jamo@, @hangul_v_jamo@, @hangul_t_jamo@, @hangul_lv_syllable@, @hangul_lvt_syllable@, @close_parenthesis@, @conditional_japanese_starter@, @hebrew_letter@.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -1038,11 +916,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* @nil@ if the character has no mirror; otherwise, the mirror character. The returned character is either an integer or a utf-8 string, depending on the input.
-</blockquote>
-
+<p>*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* @nil@ if the character has no mirror; otherwise, the mirror character. The returned character is either an integer or a utf-8 string, depending on the input.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -1057,11 +931,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The four-letter ISO 15924 script code for _c_.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The four-letter ISO 15924 script code for _c_.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -1077,11 +947,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The requested substring. Out-of-bound ranges result in an empty string.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The requested substring. Out-of-bound ranges result in an empty string.</p></dd>
 <dt> <a name="utf8&#95;len"/>utf8&#95;len (s)*</dt>
 <dd><p>Obtain the number of code points in a utf-8-encoded string. This is a wrapper for @g_utf8_strlen()@.</p>
 h3. Parameters:
@@ -1092,11 +958,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The length of _s_, in code points.
-</blockquote>
-</dd>
+<p>*number* The length of _s_, in code points.</p></dd>
 <dt> <a name="utf8&#95;validate"/>utf8&#95;validate (s)*</dt>
 <dd><p>Check if a string is valid UTF-8. This is a wrapper for @g_utf8_validate()@.</p>
 h3. Parameters:
@@ -1107,11 +969,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if _s_ is valid UTF-8.
-</blockquote>
-</dd>
+<p>*boolean* True if _s_ is valid UTF-8.</p></dd>
 <dt> <a name="utf8&#95;strup"/>utf8&#95;strup (s)*</dt>
 <dd><p>Convert UTF-8 string to upper-case. This is a wrapper for @g_utf8_strup()@.</p>
 h3. Parameters:
@@ -1122,11 +980,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all lower-case characters converted to upper-case
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all lower-case characters converted to upper-case</p></dd>
 <dt> <a name="utf8&#95;strdown"/>utf8&#95;strdown (s)*</dt>
 <dd><p>Convert UTF-8 string to lower-case. This is a wrapper for @g_utf8_strdown()@.</p>
 h3. Parameters:
@@ -1137,11 +991,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all upper-case characters converted to lower-case
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all upper-case characters converted to lower-case</p></dd>
 <dt> <a name="utf8&#95;casefold"/>utf8&#95;casefold (s)*</dt>
 <dd><p>Convert UTF-8 string to case-independent form. This is a wrapper for @g_utf8_casefold()@.</p>
 h3. Parameters:
@@ -1152,11 +1002,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, in a form that is suitable for case-insensitive direct string comparison.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, in a form that is suitable for case-insensitive direct string comparison.</p></dd>
 <dt> <a name="utf8&#95;normalize"/>utf8&#95;normalize (s[, compose[, compatible]])*</dt>
 <dd><p>Perform standard Unicode normalization on a UTF-8 string. This is a wrapper for @g_utf8_normalize()@. The four standard normalizations are NFD (the default), NFC (compose), NFKD (compatible), and NFKC (compose, compatible).</p>
 h3. Parameters:
@@ -1169,11 +1015,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The normalized UTF-8 string.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The normalized UTF-8 string.</p></dd>
 <dt> <a name="utf8&#95;collate"/>utf8&#95;collate (s1, s2)*</dt>
 <dd><p>Compare UTF-8 strings for collation. This is a wrapper for @g_utf8_collate()@.</p>
 h3. Parameters:
@@ -1185,11 +1027,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* Numeric comparison result: less than zero if _s1_ comes before _s2_, greater than zero if _s1_ comes after _s2_, and zero if _s1_ and _s2_ are equivalent.
-</blockquote>
-
+<p>*number* Numeric comparison result: less than zero if _s1_ comes before _s2_, greater than zero if _s1_ comes after _s2_, and zero if _s1_ and _s2_ are equivalent.</p>
 h3. see also:
 
 <ul>
@@ -1207,11 +1045,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison rather than utf8&#95;collate.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison rather than utf8&#95;collate.</p>
 h3. see also:
 
 <ul>
@@ -1229,11 +1063,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison. Dots and numeric sequences are treated differently. There is no equivalent @utf8_collate_filename()@.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison. Dots and numeric sequences are treated differently. There is no equivalent @utf8_collate_filename()@.</p>
 h3. see also:
 
 <ul>
@@ -1251,11 +1081,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UTF-8.</p></dd>
@@ -1269,11 +1095,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UTF-8.</p></dd>
@@ -1287,11 +1109,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UTF-16.</p></dd>
@@ -1305,11 +1123,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UTF-16.</p></dd>
@@ -1323,11 +1137,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UCS-4.</p></dd>
@@ -1341,11 +1151,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if _s_ is not valid UCS-4.</p></dd>
@@ -1359,11 +1165,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 A UTF-8 string representing _c_. Note that this basically has no effect if _c_ is a single-character string already.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 A UTF-8 string representing _c_. Note that this basically has no effect if _c_ is a single-character string already.</p>
 h3. Raises:
 
 <p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
@@ -1382,8 +1184,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). enc = glib.base64_encode()
 while true do
   buf = inf:read(4096)
@@ -1393,22 +1193,12 @@ end
 outf:write(enc())
 
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string</p>
 h3. see also:
 
-<blockquote>
-
-"base64&#95;encode":#base64_encode
-</blockquote>
-</dd>
+<p>"base64&#95;encode":#base64_encode</p></dd>
 <dt> <a name="base64&#95;encode"/>base64&#95;encode ([s])*</dt>
 <dd><p>Base64-encode a string. This is a wrapper for @g_base64_encode()@ and friends.</p>
 h3. Parameters:
@@ -1419,18 +1209,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The base64-encoded stream (without newlines), or a function to do the same on a stream.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The base64-encoded stream (without newlines), or a function to do the same on a stream.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;base64&#95;encode&#95;":#_base64_encode_
-</blockquote>
-</dd>
+<p>"&#95;base64&#95;encode&#95;":#_base64_encode_</p></dd>
 <dt> <a name="&#95;base64&#95;decode&#95;"/>&#95;base64&#95;decode&#95; ([s])*</dt>
 <dd><p>Stream Base64-decoding function returned by "base64&#95;decode":#base64_decode . This function is returned by "base64&#95;decode":#base64_decode to support piecewise-decoding streams. Simply call with string arguments, accumulating the returned strings. When finished with the stream, call with no arguments. This will return the final string to append and reset the stream for reuse.</p>
 h3. Parameters:
@@ -1441,8 +1223,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). dec = glib.base64_decode()
 while true do
   buf = inf:read(4096)
@@ -1452,22 +1232,12 @@ end
 outf:write(dec())
 
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted output
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted output</p>
 h3. see also:
 
-<blockquote>
-
-"base64&#95;decode":#base64_decode
-</blockquote>
-</dd>
+<p>"base64&#95;decode":#base64_decode</p></dd>
 <dt> <a name="base64&#95;decode"/>base64&#95;decode ([s])*</dt>
 <dd><p>Base64-decode a string. This is a wrapper for @g_base64_deocde()@ and friends.</p>
 h3. Parameters:
@@ -1478,18 +1248,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The decoded form of the base64-encoded stream, or a function to do the same on a stream.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The decoded form of the base64-encoded stream, or a function to do the same on a stream.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;base64&#95;decode&#95;":#_base64_decode_
-</blockquote>
-</dd>
+<p>"&#95;base64&#95;decode&#95;":#_base64_decode_</p></dd>
 </dl>
 
 h2. <a name="Data_Checksums"/>Data Checksums
@@ -1506,8 +1268,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). sumf = glib.md5sum()
 while true do
   buf = inf:read(4096)
@@ -1517,15 +1277,9 @@ end
 sum = sumf()
 
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed checksum.
-</blockquote>
-
+<p>&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed checksum.</p>
 h3. Raises:
 
 <p>If the state is invalid, always return @nil@.</p>
@@ -1548,18 +1302,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 checksum or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 checksum or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;sum&#95;":#_sum_
-</blockquote>
-</dd>
+<p>"&#95;sum&#95;":#_sum_</p></dd>
 <dt> <a name="sha1sum"/>sha1sum ([s[, raw]])*</dt>
 <dd><p>Compute SHA1 checksum of a string. This is a wrapper for @g_checksum_new()@ and friends.</p>
 h3. Parameters:
@@ -1571,18 +1317,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 checksum or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 checksum or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;sum&#95;":#_sum_
-</blockquote>
-</dd>
+<p>"&#95;sum&#95;":#_sum_</p></dd>
 <dt> <a name="sha256sum"/>sha256sum ([s[, raw]])*</dt>
 <dd><p>Compute SHA256 checksum of a string. This is a wrapper for @g_checksum_new()@ and friends.</p>
 h3. Parameters:
@@ -1594,18 +1332,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 checksum or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 checksum or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;sum&#95;":#_sum_
-</blockquote>
-</dd>
+<p>"&#95;sum&#95;":#_sum_</p></dd>
 </dl>
 
 h2. <a name="Secure_HMAC_Digests"/>Secure HMAC Digests
@@ -1622,8 +1352,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). hmacf = glib.md5hmac(key)
 while true do
   buf = inf:read(4096)
@@ -1633,15 +1361,9 @@ end
 hmac = hmacf()
 
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed digest.
-</blockquote>
-
+<p>&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed digest.</p>
 h3. Raises:
 
 <p>If the state is invalid, always return @nil@.</p>
@@ -1666,18 +1388,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 HMAC digest or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 HMAC digest or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;hmac&#95;":#_hmac_
-</blockquote>
-</dd>
+<p>"&#95;hmac&#95;":#_hmac_</p></dd>
 <dt> <a name="sha1hmac"/>sha1hmac (key[, s[, raw]])*</dt>
 <dd><p>Compute secure HMAC digest using SHA1. This is a wrapper for @g_hmac_new()@ and friends.</p>
 <p>This is only available with GLib 2.30 or later.</p>
@@ -1691,18 +1405,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 HMAC digest or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 HMAC digest or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;hmac&#95;":#_hmac_
-</blockquote>
-</dd>
+<p>"&#95;hmac&#95;":#_hmac_</p></dd>
 <dt> <a name="sha256hmac"/>sha256hmac (key[, s[, raw]])*</dt>
 <dd><p>Compute secure HMAC digest using SHA256. This is a wrapper for @g_hmac_new()@ and friends.</p>
 <p>This is only available with GLib 2.30 or later.</p>
@@ -1716,18 +1422,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 HMAC digest or a stream converter function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 HMAC digest or a stream converter function.</p>
 h3. see also:
 
-<blockquote>
-
-"&#95;hmac&#95;":#_hmac_
-</blockquote>
-</dd>
+<p>"&#95;hmac&#95;":#_hmac_</p></dd>
 </dl>
 
 h2. <a name="Internationalization"/>Internationalization
@@ -1743,11 +1441,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation</p></dd>
 <dt> <a name="Q&#95;"/>Q&#95; (s)*</dt>
 <dd><p>Replace text and context with its translation. This is a wrapper for @Q_()@. It resides in the global symbol table rather than in "glib":# .</p>
 h3. Parameters:
@@ -1758,11 +1452,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ with its context stripped if there is no translation
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ with its context stripped if there is no translation</p></dd>
 <dt> <a name="C&#95;"/>C&#95; (c, s)*</dt>
 <dd><p>Replace text and context with its translation. This is a wrapper for @C_()@. It resides in the global symbol table rather than in "glib":# .</p>
 h3. Parameters:
@@ -1774,11 +1464,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation</p></dd>
 <dt> <a name="N&#95;"/>N&#95; (s)*</dt>
 <dd><p>Mark text for translation. This is a wrapper for @N_()@. It resides in the global symbol table rather than in "glib":# .</p>
 h3. Parameters:
@@ -1789,11 +1475,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_</p></dd>
 <dt> <a name="NC&#95;"/>NC&#95; (c, s)*</dt>
 <dd><p>Mark text for translation with context. This is a wrapper for @NC_()@. It resides in the global symbol table rather than in "glib":# .</p>
 h3. Parameters:
@@ -1805,11 +1487,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_</p></dd>
 <dt> <a name="get&#95;locale&#95;variants"/>get&#95;locale&#95;variants ([locale])*</dt>
 <dd><p>Obtain list of valid locale names. This is a wrapper for @g_get_locale_variants()@ and @g_get_language_names()@.</p>
 <p>This is only available with GLib 2.28 or later.</p>
@@ -1821,11 +1499,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table array containing valid names for the locale, in order of preference.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table array containing valid names for the locale, in order of preference.</p></dd>
 </dl>
 
 h2. <a name="Date_and_Time_Functions"/>Date and Time Functions
@@ -1902,13 +1576,9 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 bc(example). -- set a seed for glib.random
 glib.random = glib.rand_new(seed)
 
-
-</blockquote>
 
 h3. see also:
 
@@ -1927,18 +1597,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*function* A function with the same behavior as "random":#random .
-</blockquote>
-
+<p>*function* A function with the same behavior as "random":#random .</p>
 h3. see also:
 
-<blockquote>
-
-"random":#random
-</blockquote>
-</dd>
+<p>"random":#random</p></dd>
 </dl>
 
 h2. <a name="Miscellaneous_Utility_Functions"/>Miscellaneous Utility Functions
@@ -1954,18 +1616,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the application, as set by a previous invocation of this function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the application, as set by a previous invocation of this function.</p>
 h3. see also:
 
-<blockquote>
-
-"prgname":#prgname
-</blockquote>
-</dd>
+<p>"prgname":#prgname</p></dd>
 <dt> <a name="prgname"/>prgname ([name])*</dt>
 <dd><p>Set or get program name. This is a wrapper for @g_get_prgname()@ and friends.</p>
 h3. Parameters:
@@ -1976,18 +1630,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the program, as set by a previous invocation of this function.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the program, as set by a previous invocation of this function.</p>
 h3. see also:
 
-<blockquote>
-
-"application&#95;name":#application_name
-</blockquote>
-</dd>
+<p>"application&#95;name":#application_name</p></dd>
 <dt> <a name="getenv"/>getenv (name)*</dt>
 <dd><p>Get environment variable value. This is a wrapper for @g_getenv()@. It is safer to use this than "os.getenv":http://www.lua.org/manual/5.1/manual.html#pdf-os.getenv if you are going to modify the environment.</p>
 h3. Parameters:
@@ -1998,11 +1644,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 Value of variable (string) if present; otherwise nil
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Value of variable (string) if present; otherwise nil</p>
 h3. see also:
 
 <ul>
@@ -2022,11 +1664,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if set succeeded; false otherwise
-</blockquote>
-
+<p>*boolean* True if set succeeded; false otherwise</p>
 h3. see also:
 
 <ul>
@@ -2053,29 +1691,17 @@ h3. see also:
 <dd><p>Obtain names of all environment variables. This is a wrapper for @g_listenv()@.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}An array table whose entries are environment variable names
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}An array table whose entries are environment variable names</p></dd>
 <dt> <a name="get&#95;user&#95;name"/>get&#95;user&#95;name ()*</dt>
 <dd><p>Obtain system user name for current user. This is a wrapper for @g_get_user_name()@.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the user
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the user</p></dd>
 <dt> <a name="get&#95;real&#95;name"/>get&#95;real&#95;name ()*</dt>
 <dd><p>Obtain full user name for current user. This is a wrapper for @g_get_real_name()@.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The full name of the user, or Unknown if this cannot be obtained.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The full name of the user, or Unknown if this cannot be obtained.</p></dd>
 <dt> <a name="get&#95;dir&#95;name"/>get&#95;dir&#95;name (d)*</dt>
 <dd><p>Obtain a standard directory name. This is a wrapper for @g_get_*_dir()@.</p>
 h3. Parameters:
@@ -2086,11 +1712,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The directory (a string) if there can be only one; if there can be more than one, the list of directories is returned as a table array of strings. Currently, only @list@, @system_data@, and @system_config@ return more than one.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The directory (a string) if there can be only one; if there can be more than one, the list of directories is returned as a table array of strings. Currently, only @list@, @system_data@, and @system_config@ return more than one.</p>
 h3. Raises:
 
 <p>If there is no standard directory of the given kind, returns @nil@.</p></dd>
@@ -2098,20 +1720,12 @@ h3. Raises:
 <dd><p>Obtain current host name. This is a wrapper for @g_get_host_name()@.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The local host name. This is not guaranteed to be a unique identifier for the host, or in any way related to its DNS entry.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The local host name. This is not guaranteed to be a unique identifier for the host, or in any way related to its DNS entry.</p></dd>
 <dt> <a name="get&#95;current&#95;dir"/>get&#95;current&#95;dir ()*</dt>
 <dd><p>Obtain current working directory. This is a wrapper for @g_get_current_dir()@.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The current working directory, as an absolute path.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The current working directory, as an absolute path.</p></dd>
 <dt> <a name="path&#95;is&#95;absolute"/>path&#95;is&#95;absolute (d)*</dt>
 <dd><p>Check if a directory is absolute. This is a wrapper for @g_path_is_absolute()@.</p>
 h3. Parameters:
@@ -2122,11 +1736,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if d is absolute; false otherwise.
-</blockquote>
-</dd>
+<p>*boolean* True if d is absolute; false otherwise.</p></dd>
 <dt> <a name="path&#95;split&#95;root"/>path&#95;split&#95;root (d)*</dt>
 <dd><p>Split the root part from a path. This is a wrapper for @g_path_skip_root()@.</p>
 h3. Parameters:
@@ -2152,11 +1762,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The last path element of the path
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The last path element of the path</p></dd>
 <dt> <a name="path&#95;get&#95;dirname"/>path&#95;get&#95;dirname (d)*</dt>
 <dd><p>Obtain all but the last element of a path. This is a wrapper for @g_path_dirname()@. Note that if there is no parent element, and the path is relative, . may be returned. If the path is absolute, the absolute prefix may be returned even if it is the only element present. If there is a terminating directory separator, this may return the same path element as "path&#95;get&#95;basename":#path_get_basename .</p>
 h3. Parameters:
@@ -2167,11 +1773,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 All but the last element of the path.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 All but the last element of the path.</p></dd>
 <dt> <a name="build&#95;filename"/>build&#95;filename (...)*</dt>
 <dd><p>Construct a file name from its path constituents. This is a wrapper for @g_build_filenamev()@. There is no inverse operation, but it can be implemented in Lua:</p>
 bc. -- assumes multiple consecutive directory separators are the same as
@@ -2205,11 +1807,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one directory separator as appropriate.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one directory separator as appropriate.</p></dd>
 <dt> <a name="build&#95;path"/>build&#95;path (sep, ...)*</dt>
 <dd><p>Construct a path from its constituents. This is a wrapper for @g_build_pathv()@. Note that blank elements are simply ignored. If blank elements are required, use Lua instead:</p>
 bc. function build_path(sep, ...)
@@ -2240,18 +1838,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one path separator.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one path separator.</p>
 h3. see also:
 
-<blockquote>
-
-"build&#95;filename":#build_filename
-</blockquote>
-</dd>
+<p>"build&#95;filename":#build_filename</p></dd>
 <dt> <a name="path&#95;canonicalize"/>path&#95;canonicalize (f)*</dt>
 <dd><p>Canonicalize a path name. This does not wrap anything in GLib, as GLib does not provide such a function. This function converts a path name to an absolute path name with all relative path references (i.e., . and ..) removed and symbolic links resolved. Additional steps are taken on Windows in an attempt to resolve the myriad of ways a path name may be specified, including short-to-long name conversion, case normalization (for path elements which exist), and UNC format consolidation. Note that there are several unresolvable issues: On Windows, there may be host names in the path, which are hard to resolve even with DNS. Also, both Windows and UNIX might have a the same path mounted in two different places, and sometimes it's hard to tell that they are the same (and no extra effort is put into checking, either).</p>
 h3. Parameters:
@@ -2262,11 +1852,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The canonicalized file name. Note that on Windows, the canonical name always uses backslashes for directory separators.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The canonicalized file name. Note that on Windows, the canonical name always uses backslashes for directory separators.</p>
 h3. Raises:
 
 <p>Returns @nil@ followed by an error message if there is a problem</p></dd>
@@ -2297,18 +1883,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*integer* Greater than zero if _a_ is greater than _b_; less than zero if _a_ is less than _b_; zero if _a_ is equal to _b_.
-</blockquote>
-
+<p>*integer* Greater than zero if _a_ is greater than _b_; less than zero if _a_ is less than _b_; zero if _a_ is equal to _b_.</p>
 h3. see also:
 
-<blockquote>
-
-"utf8&#95;collate":#utf8_collate
-</blockquote>
-</dd>
+<p>"utf8&#95;collate":#utf8_collate</p></dd>
 </dl>
 
 h2. <a name="Timers"/>Timers
@@ -2318,11 +1896,7 @@ h2. <a name="Timers"/>Timers
 <dd><p>Create a stopwatch-like timer. This is a wrapper for @g_timer_new()@.</p>
 h3. Returns:
 
-<blockquote>
-
-"timer":#Class_timer A timer object
-</blockquote>
-</dd>
+<p>"timer":#Class_timer A timer object</p></dd>
 </dl>
 
 h2. <a name="Class_timer"/>Class timer
@@ -2338,11 +1912,7 @@ h2. <a name="Class_timer"/>Class timer
 <dd><p>Return the amount of time counted so far. This is a wrapper for @g_timer_elapsed()@.</p>
 h3. Returns:
 
-<blockquote>
-
-*number* The time counted so far, in seconds.
-</blockquote>
-</dd>
+<p>*number* The time counted so far, in seconds.</p></dd>
 </dl>
 
 h2. <a name="Spawning_Processes"/>Spawning Processes
@@ -2376,8 +1946,6 @@ h3. Parameters:
 
 h3. Usage:
 
-<blockquote>
-
 <pre class="example">
 -- fully quoted arguments
 p = glib.spawn {'cat', f}
@@ -2399,22 +1967,12 @@ p:wait()
 of:close()
 </pre>
 
-</blockquote>
-
 h3. Returns:
 
-<blockquote>
-
-"process":#Class_process An object representing the process.
-</blockquote>
-
+<p>"process":#Class_process An object representing the process.</p>
 h3. see also:
 
-<blockquote>
-
-"shell&#95;parse&#95;argv":#shell_parse_argv
-</blockquote>
-</dd>
+<p>"shell&#95;parse&#95;argv":#shell_parse_argv</p></dd>
 </dl>
 
 h2. <a name="Class_process"/>Class process
@@ -2430,18 +1988,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if reading using the given format(s) will succeed without blocking.
-</blockquote>
-
+<p>*boolean* True if reading using the given format(s) will succeed without blocking.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read":#process:read
-</blockquote>
-</dd>
+<p>"process:read":#process:read</p></dd>
 <dt> <a name="process:read&#95;err&#95;ready"/>process:read&#95;err&#95;ready (...)*</dt>
 <dd><p>Wait for input to be available from process standard error. See the documentation for "process:read&#95;ready":#process:read_ready for details.</p>
 h3. Parameters:
@@ -2452,18 +2002,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if reading using the given format(s) will succeed without blocking.
-</blockquote>
-
+<p>*boolean* True if reading using the given format(s) will succeed without blocking.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read&#95;ready":#process:read_ready
-</blockquote>
-</dd>
+<p>"process:read&#95;ready":#process:read_ready</p></dd>
 <dt> <a name="process:read"/>process:read (...)*</dt>
 <dd><p>Read data from a process' standard output. This function is a clone of the standard Lua @file:read@ function. It defers actual I/O to the "process:read&#95;ready":#process:read_ready routine, which in turn lets a background thread do all of the reading. It will block until process:read&#95;ready` is true, and then read directly from the buffer read by the thread.</p>
 h3. Parameters:
@@ -2481,18 +2023,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* For each parameter (or for the line read by the empty parameter list), the results of reading that format are returned. If an error occurred for any parameter, @nil@ is returned for that parameter and no further parameters are processed.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* For each parameter (or for the line read by the empty parameter list), the results of reading that format are returned. If an error occurred for any parameter, @nil@ is returned for that parameter and no further parameters are processed.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read&#95;ready":#process:read_ready
-</blockquote>
-</dd>
+<p>"process:read&#95;ready":#process:read_ready</p></dd>
 <dt> <a name="process:read&#95;err"/>process:read&#95;err (...)*</dt>
 <dd><p>Read data from a process' standard error. See the "process:read":#process:read function documentation for details.</p>
 h3. Parameters:
@@ -2503,66 +2037,34 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* See the read function documentation for details.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* See the read function documentation for details.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read":#process:read
-</blockquote>
-</dd>
+<p>"process:read":#process:read</p></dd>
 <dt> <a name="process:lines"/>process:lines ()*</dt>
 <dd><p>Return an iterator which reads lines from the process' standard output. On each iteration, this returns the result of "process:read":#process:read ().</p>
 h3. Returns:
 
-<blockquote>
-
-*function* The iterator.
-</blockquote>
-
+<p>*function* The iterator.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read":#process:read
-</blockquote>
-</dd>
+<p>"process:read":#process:read</p></dd>
 <dt> <a name="process:lines&#95;err"/>process:lines&#95;err ()*</dt>
 <dd><p>Return an iterator which reads lines from the process' standard error. On each iteration, this returns the result of "process:read&#95;err":#process:read_err ().</p>
 h3. Returns:
 
-<blockquote>
-
-*function* The iterator.
-</blockquote>
-
+<p>*function* The iterator.</p>
 h3. see also:
 
-<blockquote>
-
-"process:read&#95;err":#process:read_err
-</blockquote>
-</dd>
+<p>"process:read&#95;err":#process:read_err</p></dd>
 <dt> <a name="process:write&#95;ready"/>process:write&#95;ready ()*</dt>
 <dd><p>Check if writing to the process' standard input will block. Writing to a process' standard input is made non-blocking by running writes in a background thread.</p>
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if a call to process:write() will not block.
-</blockquote>
-
+<p>*boolean* True if a call to process:write() will not block.</p>
 h3. see also:
 
-<blockquote>
-
-"process:write":#process:write
-</blockquote>
-</dd>
+<p>"process:write":#process:write</p></dd>
 <dt> <a name="process:write"/>process:write (...)*</dt>
 <dd><p>Write to a process' standard input. Writes all arguments to the process' standard input. It does this using a background writer thread that writes each argument before allowing the next write. In other words, the first write will not block, but subsequent writes will bock until the previous write has completed.</p>
 h3. Parameters:
@@ -2573,18 +2075,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* Returns true on success. However, since the write has not truly completed until the background writer has finished, the only way to ensure that writing was complete and successful is to use "process:write&#95;ready":#process:write_ready or "process:io&#95;wait":#process:io_wait .
-</blockquote>
-
+<p>*boolean* Returns true on success. However, since the write has not truly completed until the background writer has finished, the only way to ensure that writing was complete and successful is to use "process:write&#95;ready":#process:write_ready or "process:io&#95;wait":#process:io_wait .</p>
 h3. see also:
 
-<blockquote>
-
-"process:write&#95;ready":#process:write_ready
-</blockquote>
-</dd>
+<p>"process:write&#95;ready":#process:write_ready</p></dd>
 <dt> <a name="process:close"/>process:close ()*</dt>
 <dd>Close the process' standard input channel. This function flushes any pending writes and closes the input channel. Many processes which take input from standard input need this to detect the end of input in order to continue processing.</dd>
 <dt> <a name="process:io&#95;wait"/>process:io&#95;wait ([check&#95;in[, check&#95;out[, check&#95;err]]])*</dt>
@@ -2610,20 +2104,12 @@ h3. Returns:
 <dd><p>Return the glib process ID for the process. Using the process ID for anything other than printing debug messages is non-portable.</p>
 h3. Returns:
 
-<blockquote>
-
-*number* GLib process ID (which may or may not correspond to a system process ID)
-</blockquote>
-</dd>
+<p>*number* GLib process ID (which may or may not correspond to a system process ID)</p></dd>
 <dt> <a name="process:status"/>process:status ()*</dt>
 <dd><p>Return the status of the running process.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* If the process is running, the string @running@ is returned. Otherwise, the numeric exit code from the process is returned.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* If the process is running, the string @running@ is returned. Otherwise, the numeric exit code from the process is returned.</p></dd>
 <dt> <a name="process:wait"/>process:wait ()*</dt>
 <dd><p>Wait for process termination and clean up. This function starts background reads for all data on the standard output and standard error channels, and flushes and closes the standard input channel. It then waits for the process to finish. Once finished, the result code from the process and any gathered standard input and standard error are returned.</p>
 h3. Returns:
@@ -2680,11 +2166,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* true if _name_ names a plain file
-</blockquote>
-</dd>
+<p>*boolean* true if _name_ names a plain file</p></dd>
 <dt> <a name="is&#95;dir"/>is&#95;dir (name)*</dt>
 <dd><p>Test if the given path points to a directory. This function is a wrapper for @g_file_test()@.</p>
 h3. Parameters:
@@ -2695,11 +2177,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* true if _name_ names a plain file
-</blockquote>
-</dd>
+<p>*boolean* true if _name_ names a plain file</p></dd>
 <dt> <a name="is&#95;symlink"/>is&#95;symlink (name)*</dt>
 <dd><p>Test if the given path points to a symbolic link. This function is a wrapper for @g_file_test()@. Note that if this returns true, the is&#95;dir and is&#95;file tests may still return true as well, since they follow symbolic links.</p>
 h3. Parameters:
@@ -2710,11 +2188,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* true if _name_ names a symbolic link
-</blockquote>
-</dd>
+<p>*boolean* true if _name_ names a symbolic link</p></dd>
 <dt> <a name="is&#95;exec"/>is&#95;exec (name)*</dt>
 <dd><p>Test if the given path points to an executable file. This function is a wrapper for @g_file_test()@. Note that GLib uses heuristics on Windows, since there is no executable bit to test.</p>
 h3. Parameters:
@@ -2725,11 +2199,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* true if _name_ names an executable file.
-</blockquote>
-</dd>
+<p>*boolean* true if _name_ names an executable file.</p></dd>
 <dt> <a name="exists"/>exists (name)*</dt>
 <dd><p>Test if the given path points to a file or directory. This function is a wrapper for @g_file_test()@. Note that invalid symbolic links return false, even though they actually exist.</p>
 h3. Parameters:
@@ -2740,11 +2210,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* true if _name_ exists in the file system
-</blockquote>
-</dd>
+<p>*boolean* true if _name_ exists in the file system</p></dd>
 <dt> <a name="umask"/>umask ([mask])*</dt>
 <dd><p>Change default file and directory creation permissions mask. This is a wrapper for the system @umask()@ function, since there is no equivalent in GLib.</p>
 h3. Parameters:
@@ -2755,11 +2221,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The previous mask.
-</blockquote>
-</dd>
+<p>*number* The previous mask.</p></dd>
 <dt> <a name="mkstemp"/>mkstemp (tmpl[, perm])*</dt>
 <dd><p>Create a unique temporary file from a pattern. This function is a wrapper for @g_mkstemp()@. It creates a new, unique file by replacing the X characters in a template with six consecutive X characters.</p>
 h3. Parameters:
@@ -2807,11 +2269,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 Link contents
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Link contents</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -2826,11 +2284,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -2846,11 +2300,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -2865,11 +2315,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -2883,11 +2329,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*function* Iterator
-</blockquote>
-
+<p>*function* Iterator</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -2902,11 +2344,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -2921,11 +2359,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -2984,11 +2418,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True on success.
-</blockquote>
-
+<p>*boolean* True on success.</p>
 h3. Raises:
 
 <p>Returns false and an error message string on failure. Note that the error message is probably invalid if the entity was not a directory.</p></dd>
@@ -3003,11 +2433,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -3053,11 +2479,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -3073,11 +2495,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -3093,11 +2511,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns False and an error message string on failure</p></dd>
@@ -3126,11 +2540,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The scheme
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The scheme</p>
 h3. Raises:
 
 <p>Returns @nil@ on error.</p></dd>
@@ -3146,11 +2556,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.</p></dd>
 <dt> <a name="uri&#95;unescape&#95;string"/>uri&#95;unescape&#95;string (s[, illegal])*</dt>
 <dd><p>Unescapes an escaped string. This is a wrapper for @g_uri_unescape_string()@.</p>
 h3. Parameters:
@@ -3162,11 +2568,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unescaped string.
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unescaped string.</p>
 h3. Raises:
 
 <p>Returns @nil@ on error.</p></dd>
@@ -3180,11 +2582,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the URIs
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the URIs</p></dd>
 <dt> <a name="filename&#95;from&#95;uri"/>filename&#95;from&#95;uri (uri)*</dt>
 <dd><p>Converts an ASCII-encoded URI to a local filename. This is a wrapper for @g_filename_from_uri()@.</p>
 h3. Parameters:
@@ -3214,11 +2612,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -3237,11 +2631,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name</p>
 h3. Raises:
 
 <p>Returns @nil@ on error.</p></dd>
@@ -3255,11 +2645,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name</p>
 h3. Raises:
 
 <p>Returns @nil@ on error.</p></dd>
@@ -3273,11 +2659,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if the host name needs to be converted to ASCII for non-IDN-aware contexts.
-</blockquote>
-</dd>
+<p>*boolean* True if the host name needs to be converted to ASCII for non-IDN-aware contexts.</p></dd>
 <dt> <a name="hostname&#95;is&#95;ascii&#95;encoded"/>hostname&#95;is&#95;ascii&#95;encoded (hostname)*</dt>
 <dd><p>Check if a host name contains ASCII-encoded Unicode characters. This is a wrapper for @g_hostname_is_ascii_encoded()@.</p>
 h3. Parameters:
@@ -3288,11 +2670,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if the host name needs to be converted to Unicode for presentation and IDN-aware contexts.
-</blockquote>
-</dd>
+<p>*boolean* True if the host name needs to be converted to Unicode for presentation and IDN-aware contexts.</p></dd>
 <dt> <a name="hostname&#95;is&#95;ip&#95;address"/>hostname&#95;is&#95;ip&#95;address (hostname)*</dt>
 <dd><p>Check if a string is an IPv4 or IPv6 numeric address. This is a wrapper for @g_hostname_is_ip_address()@.</p>
 h3. Parameters:
@@ -3303,11 +2681,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if the host name is actually an IP address
-</blockquote>
-</dd>
+<p>*boolean* True if the host name is actually an IP address</p></dd>
 </dl>
 
 h2. <a name="Shell-related_Utilities"/>Shell-related Utilities
@@ -3323,11 +2697,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the command-line arguments
-</blockquote>
-
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the command-line arguments</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -3341,11 +2711,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The quoted string
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The quoted string</p></dd>
 <dt> <a name="shell&#95;unquote"/>shell&#95;unquote (s)*</dt>
 <dd><p>Unquote a string quoted for use as a shell argument. This is a wrapper for @g_shell_unquote()@.</p>
 h3. Parameters:
@@ -3356,11 +2722,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unquoted string
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unquoted string</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -3413,11 +2775,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"regex":#Class_regex The compiled regular expression
-</blockquote>
-
+<p>"regex":#Class_regex The compiled regular expression</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -3431,11 +2789,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.</p></dd>
 </dl>
 
 h2. <a name="Class_regex"/>Class regex
@@ -3445,29 +2799,17 @@ h2. <a name="Class_regex"/>Class regex
 <dd><p>Get the pattern string used to create this regex.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The pattern string
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The pattern string</p></dd>
 <dt> <a name="regex:get&#95;max&#95;backref"/>regex:get&#95;max&#95;backref ()*</dt>
 <dd><p>Get the highest back reference in the pattern.</p>
 h3. Returns:
 
-<blockquote>
-
-*number* The number of the highest backreference, or 0 if there are none.
-</blockquote>
-</dd>
+<p>*number* The number of the highest backreference, or 0 if there are none.</p></dd>
 <dt> <a name="regex:get&#95;capture&#95;count"/>regex:get&#95;capture&#95;count ()*</dt>
 <dd><p>Get the number of capturing subpatterns in the pattern.</p>
 h3. Returns:
 
-<blockquote>
-
-*number* The number of capturing subpatterns.
-</blockquote>
-</dd>
+<p>*number* The number of capturing subpatterns.</p></dd>
 <dt> <a name="regex:get&#95;string&#95;number"/>regex:get&#95;string&#95;number (name)*</dt>
 <dd><p>Get the number of the capturing subexpression with the given name.</p>
 h3. Parameters:
@@ -3478,29 +2820,17 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The subexpression number, or -1 if _name_ does not exist
-</blockquote>
-</dd>
+<p>*number* The subexpression number, or -1 if _name_ does not exist</p></dd>
 <dt> <a name="regex:get&#95;compile&#95;flags"/>regex:get&#95;compile&#95;flags ()*</dt>
 <dd><p>Get the names of all compile flags set when regex was created.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.</p></dd>
 <dt> <a name="regex:get&#95;match&#95;flags"/>regex:get&#95;match&#95;flags ()*</dt>
 <dd><p>Get the names of all matching flags set when regex was created.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.</p></dd>
 <dt> <a name="regex:find"/>regex:find (s[, start[, mflags]])*</dt>
 <dd><p>Search for a match in a string.</p>
 h3. Parameters:
@@ -3538,11 +2868,7 @@ h3. Raises:
 <p>Returns @nil@ and error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find
-</blockquote>
-</dd>
+<p>"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find</p></dd>
 <dt> <a name="regex:tfind"/>regex:tfind (s[, start[, mflags]])*</dt>
 <dd><p>Search for a match in a string.</p>
 h3. Parameters:
@@ -3580,11 +2906,7 @@ h3. Raises:
 <p>Returns @nil@ and error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find
-</blockquote>
-</dd>
+<p>"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find</p></dd>
 <dt> <a name="regex:match"/>regex:match (s[, start[, mflags]])*</dt>
 <dd><p>Search for a match in a string.</p>
 h3. Parameters:
@@ -3621,11 +2943,7 @@ h3. Raises:
 <p>Returns @nil@ and error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"string.match":http://www.lua.org/manual/5.1/manual.html#pdf-string.match
-</blockquote>
-</dd>
+<p>"string.match":http://www.lua.org/manual/5.1/manual.html#pdf-string.match</p></dd>
 <dt> <a name="regex:gmatch"/>regex:gmatch (s[, start[, mflags]])*</dt>
 <dd><p>Search for all matches in a string.</p>
 h3. Parameters:
@@ -3651,11 +2969,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*function* An iterator function which, on each iteration, returns the same as "regex:match":#regex:match would have for the next match in the string.
-</blockquote>
-
+<p>*function* An iterator function which, on each iteration, returns the same as "regex:match":#regex:match would have for the next match in the string.</p>
 h3. see also:
 
 <ul>
@@ -3688,18 +3002,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*function* An iterator function which, on each iteration, returns the same as "regex:find":#regex:find would have for the next match in the string.
-</blockquote>
-
+<p>*function* An iterator function which, on each iteration, returns the same as "regex:find":#regex:find would have for the next match in the string.</p>
 h3. see also:
 
-<blockquote>
-
-"regex:find":#regex:find
-</blockquote>
-</dd>
+<p>"regex:find":#regex:find</p></dd>
 <dt> <a name="regex:gtfind"/>regex:gtfind (s[, start[, mflags]])*</dt>
 <dd><p>Search for all matches in a string.</p>
 h3. Parameters:
@@ -3725,18 +3031,10 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*function* An iterator function which, on each iteration, returns the same as "regex:tfind":#regex:tfind would have for the next match in the string.
-</blockquote>
-
+<p>*function* An iterator function which, on each iteration, returns the same as "regex:tfind":#regex:tfind would have for the next match in the string.</p>
 h3. see also:
 
-<blockquote>
-
-"regex:tfind":#regex:tfind
-</blockquote>
-</dd>
+<p>"regex:tfind":#regex:tfind</p></dd>
 <dt> <a name="regex:split"/>regex:split (s[, start[, mflags[, max]]])*</dt>
 <dd><p>Split a string with a regular expression separator.</p>
 h3. Parameters:
@@ -3762,8 +3060,6 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
 <p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* ,...}</p>
 <p>The elements separated by the regular expression. Each element is separated by any capture strings from the separator, if present. If a capture does not exist, false is returned for that capture. If there are no captures, only the elements are returned. For example:</p>
 bc.  rx = glib.regex_new('\\|(.?)\\|')
@@ -3771,8 +3067,6 @@ bc.  rx = glib.regex_new('\\|(.?)\\|')
   -- { 'abc', '', 'def', '!', 'ghi' }
 
 
-
-</blockquote>
 </dd>
 <dt> <a name="regex:gsub"/>regex:gsub (s, repl[, start[, n[, mflags]]])*</dt>
 <dd><p>Replace occurrences of regular expression in string.</p>
@@ -3811,11 +3105,7 @@ h3. Raises:
 <p>Returns @nil@ and error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"regex&#95;escape&#95;string":#regex_escape_string
-</blockquote>
-</dd>
+<p>"regex&#95;escape&#95;string":#regex_escape_string</p></dd>
 </dl>
 
 h2. <a name="Simple_XML_Subset_Parser"/>Simple XML Subset Parser
@@ -3886,11 +3176,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string</p></dd>
 <dt> <a name="&#95;gmarkup&#95;start&#95;element&#95;"/>&#95;gmarkup&#95;start&#95;element&#95; (ctx, name, attr&#95;names, attr&#95;values)*</dt>
 <dd><p>The function called when an opening tag of an element is seen.</p>
 h3. Parameters:
@@ -3903,8 +3189,6 @@ h3. Parameters:
 </ul>
 
 h3. Usage:
-
-<blockquote>
 
 bc(example). function counter()
   local count = 0
@@ -3923,11 +3207,7 @@ gmp = markup_parse_context_new {
 }
 
 
-</blockquote>
-
 h3. Returns:
-
-<blockquote>
 
 <p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 =*value* ,...}&#124;*nil*</p>
 <p>If present and a table, push the parser context and use the returned parser instead. The current parser will resume upon reaching the associated end element. See "markup&#95;parse&#95;context&#95;new":#markup_parse_context_new for details.</p>
@@ -3939,8 +3219,6 @@ h3. Returns:
 <li>*error*: a function like "&#95;gmarkup&#95;error&#95;":#_gmarkup_error_ .</li>
 <li>*pop*: a value to pass to the _end&#95;element_ handler when finished. It may be any value, but a function is probably most suitable. There is no guarantee that this value will ever be used, since it requires that no errors occur and that the _end&#95;element_ handler actually uses it.</li>
 </ul>
-
-</blockquote>
 
 h3. Raises:
 
@@ -3970,11 +3248,7 @@ h3. Raises:
 <p>Returns error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
-</blockquote>
-</dd>
+<p>"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new</p></dd>
 <dt> <a name="&#95;gmarkup&#95;text&#95;"/>&#95;gmarkup&#95;text&#95; (ctx, text)*</dt>
 <dd><p>The function called when text within an element is seen.</p>
 h3. Parameters:
@@ -3989,11 +3263,7 @@ h3. Raises:
 <p>Returns error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
-</blockquote>
-</dd>
+<p>"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new</p></dd>
 <dt> <a name="&#95;gmarkup&#95;passthrough&#95;"/>&#95;gmarkup&#95;passthrough&#95; (ctx, text)*</dt>
 <dd><p>The function called when unprocessed text is seen.</p>
 h3. Parameters:
@@ -4008,11 +3278,7 @@ h3. Raises:
 <p>Returns error message string on error.</p>
 h3. see also:
 
-<blockquote>
-
-"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
-</blockquote>
-</dd>
+<p>"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new</p></dd>
 <dt> <a name="&#95;gmarkup&#95;error&#95;"/>&#95;gmarkup&#95;error&#95; (ctx, text)*</dt>
 <dd><p>The function called when an error occurs during parsing.</p>
 h3. Parameters:
@@ -4024,11 +3290,7 @@ h3. Parameters:
 
 h3. see also:
 
-<blockquote>
-
-"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
-</blockquote>
-</dd>
+<p>"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new</p></dd>
 <dt> <a name="markup&#95;parse&#95;context&#95;new"/>markup&#95;parse&#95;context&#95;new (options)*</dt>
 <dd><p>Create GMarkup parser.</p>
 h3. Parameters:
@@ -4067,11 +3329,7 @@ h2. <a name="Class_markup&#95;parse&#95;context"/>Class markup&#95;parse&#95;con
 <dd><p>Finish parsing.</p>
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4088,20 +3346,12 @@ h3. Returns:
 <dd><p>Obtain the name of the current element being processed.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The element name.
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The element name.</p></dd>
 <dt> <a name="markup&#95;parse&#95;context:get&#95;element&#95;stack"/>markup&#95;parse&#95;context:get&#95;element&#95;stack ()*</dt>
 <dd><p>Obtain the complete path of element names to the current element being processed.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The element names, starting with the most deeply nested.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The element names, starting with the most deeply nested.</p></dd>
 <dt> <a name="markup&#95;parse&#95;context:parse"/>markup&#95;parse&#95;context:parse (s)*</dt>
 <dd><p>Parse some text.</p>
 h3. Parameters:
@@ -4112,11 +3362,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4129,11 +3375,7 @@ h2. <a name="Key-value_file_parser"/>Key-value file parser
 <dd><p>Create a new, empty key file.</p>
 h3. Returns:
 
-<blockquote>
-
-"key&#95;file":#Class_key_file The empty key file
-</blockquote>
-</dd>
+<p>"key&#95;file":#Class_key_file The empty key file</p></dd>
 </dl>
 
 h2. <a name="Class_key&#95;file"/>Class key&#95;file
@@ -4180,11 +3422,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4192,11 +3430,7 @@ h3. Raises:
 <dd><p>Convert entire key file to a string.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The key file contents
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The key file contents</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4204,20 +3438,12 @@ h3. Raises:
 <dd><p>Get the start group of the key file.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the start group
-</blockquote>
-</dd>
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the start group</p></dd>
 <dt> <a name="key&#95;file:get&#95;groups"/>key&#95;file:get&#95;groups ()*</dt>
 <dd><p>Get the names of all groups in the key file.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all the groups.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all the groups.</p></dd>
 <dt> <a name="key&#95;file:get&#95;keys"/>key&#95;file:get&#95;keys (group)*</dt>
 <dd><p>Get the names of all keys in a group.</p>
 h3. Parameters:
@@ -4228,11 +3454,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all keys in the &#42;group
-</blockquote>
-
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all keys in the &#42;group</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4246,11 +3468,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if group exists in key file.
-</blockquote>
-</dd>
+<p>*boolean* True if group exists in key file.</p></dd>
 <dt> <a name="key&#95;file:has&#95;key"/>key&#95;file:has&#95;key (group, key)*</dt>
 <dd><p>Check if key exists.</p>
 h3. Parameters:
@@ -4262,11 +3480,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if key exists in key file.
-</blockquote>
-
+<p>*boolean* True if key exists in key file.</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4281,11 +3495,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The value
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The value</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4301,11 +3511,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The parsed UTF-8 value
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The parsed UTF-8 value</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4320,11 +3526,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* The value
-</blockquote>
-
+<p>*boolean* The value</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4339,11 +3541,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The value
-</blockquote>
-
+<p>*number* The value</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4359,11 +3557,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of parsed UTF-8 values
-</blockquote>
-
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of parsed UTF-8 values</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4378,11 +3572,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{*boolean* ,...}The list of values
-</blockquote>
-
+<p>{*boolean* ,...}The list of values</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4397,11 +3587,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{*number* ,...}The list of values
-</blockquote>
-
+<p>{*number* ,...}The list of values</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4416,11 +3602,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;The comment string
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;The comment string</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4507,11 +3689,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4526,11 +3704,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4545,11 +3719,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4562,11 +3732,7 @@ h2. <a name="Bookmark_file_parser"/>Bookmark file parser
 <dd><p>Create a new, empty bookmark file.</p>
 h3. Returns:
 
-<blockquote>
-
-"bookmark&#95;file":#Class_bookmark_file The empty bookmark file.
-</blockquote>
-</dd>
+<p>"bookmark&#95;file":#Class_bookmark_file The empty bookmark file.</p></dd>
 </dl>
 
 h2. <a name="Class_bookmark&#95;file"/>Class bookmark&#95;file
@@ -4601,11 +3767,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4613,11 +3775,7 @@ h3. Raises:
 <dd><p>Convert bookmark file to a string.</p>
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 The bookmark file contents
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The bookmark file contents</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4631,11 +3789,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4649,11 +3803,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if present
-</blockquote>
-</dd>
+<p>*boolean* True if present</p></dd>
 <dt> <a name="bookmark&#95;file:has&#95;group"/>bookmark&#95;file:has&#95;group (uri, group)*</dt>
 <dd><p>Check if bookmark file has given URI in a given group.</p>
 h3. Parameters:
@@ -4665,11 +3815,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if present in group
-</blockquote>
-
+<p>*boolean* True if present in group</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4684,29 +3830,17 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if registed by application
-</blockquote>
-</dd>
+<p>*boolean* True if registed by application</p></dd>
 <dt> <a name="bookmark&#95;file:&#95;&#95;len"/>bookmark&#95;file:&#95;&#95;len ()*</dt>
 <dd><p>Get the number of bookmarks. This is the standard Lua # operator, applied to a bookmark file.</p>
 h3. Returns:
 
-<blockquote>
-
-*number* The number of bookmarks.
-</blockquote>
-</dd>
+<p>*number* The number of bookmarks.</p></dd>
 <dt> <a name="bookmark&#95;file:uris"/>bookmark&#95;file:uris ()*</dt>
 <dd><p>Get all URIs.</p>
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}All URIs.
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}All URIs.</p></dd>
 <dt> <a name="bookmark&#95;file:title"/>bookmark&#95;file:title (uri)*</dt>
 <dd><p>Get title for URI</p>
 h3. Parameters:
@@ -4717,11 +3851,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its title
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its title</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4735,11 +3865,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its description
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its description</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4753,11 +3879,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its MIME type
-</blockquote>
-
+<p>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its MIME type</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4771,11 +3893,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True if private flag set
-</blockquote>
-
+<p>*boolean* True if private flag set</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -4807,11 +3925,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The time stamp, as seconds from epoch
-</blockquote>
-
+<p>*number* The time stamp, as seconds from epoch</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4825,11 +3939,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The time stamp, as seconds from epoch
-</blockquote>
-
+<p>*number* The time stamp, as seconds from epoch</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4843,11 +3953,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*number* The time stamp, as seconds from epoch
-</blockquote>
-
+<p>*number* The time stamp, as seconds from epoch</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4861,11 +3967,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups
-</blockquote>
-
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4879,11 +3981,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of applications
-</blockquote>
-
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of applications</p>
 h3. Raises:
 
 <p>Returns @nil@ and error message string on error.</p></dd>
@@ -4990,11 +4088,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups
-</blockquote>
-</dd>
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups</p></dd>
 <dt> <a name="bookmark&#95;file:set&#95;app&#95;info"/>bookmark&#95;file:set&#95;app&#95;info (uri, app, exec[, rcount[, stamp]])*</dt>
 <dd><p>Set registration information for application which registered URI.</p>
 h3. Parameters:
@@ -5009,11 +4103,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -5047,11 +4137,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -5066,11 +4152,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -5084,11 +4166,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
@@ -5103,11 +4181,7 @@ h3. Parameters:
 
 h3. Returns:
 
-<blockquote>
-
-*boolean* True
-</blockquote>
-
+<p>*boolean* True</p>
 h3. Raises:
 
 <p>Returns false and error message string on error.</p></dd>
