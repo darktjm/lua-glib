@@ -114,7 +114,7 @@ almost certainly needs Odin for best results.  I chose textile because
 markdown doesn't do tables (at least not in a way that's compatible with
 anything pandoc can produce). and all the other formats produced plain
 ASCII on GitHub, in spite of claims to the contrary at
-https://www.github.com/github/markdown/.
+https://www.github.com/github/markup/.
 
 Questions/comments to darktjm@gmail.com.
 
