@@ -48,7 +48,7 @@ The "discount":http://www.pell.portland.or.us/~orc/Code/discount/ version I used
 
 Note that since LDoc does not support error return sections, I have used exception sections (&#64;raise) instead.
 
-For GitHub, I have converted this documentation to textile using pandoc and a bit of filtering. See the Lua filtering code in Odinfile; this almost certainly needs Odin for best results. I chose textile because markdown doesn't do tables (at least not in a way that's compatible with anything pandoc can produce). and all the other formats produced plain ASCII on GitHub, in spite of claims to the contrary at https://www.github.com/github/markdown/.
+For GitHub, I have converted this documentation to textile using pandoc and a bit of filtering. See the Lua filtering code in Odinfile; this almost certainly needs Odin for best results. I chose textile because markdown doesn't do tables (at least not in a way that's compatible with anything pandoc can produce). and all the other formats produced plain ASCII on GitHub, in spite of claims to the contrary at https://www.github.com/github/markup/.
 
 Questions/comments to darktjm&#64;gmail.com.
 
