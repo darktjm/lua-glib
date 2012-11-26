@@ -7,12 +7,16 @@ support for GTK+ and other various derivatives of GLib.  The specific
 version against this was developed was 2.32.4; I have scanned the
 documentation for added symbols, and it should compile as far back as
 version 2.26 with a few minor missing features (search for "available with
-GLib" or "ignored with GLib").
+GLib" or "ignored with GLib").  The reason 2.26 was chosen is that it is
+the oldest version permitted with the GLIB_VERSION_MIN_REQUIRED macro,
+even though I could've gone as low as 2.18 without significant loss of
+functionality.
 
-This package was originally part of another project with a weird
-build system, so no build support is provided in this standalone
-version, at least for now.  Just compile with appropriate flags
-to create a shared library linked against the Lua and GLib libraries.
+This package was split off from my odin-lua project, so it uses
+an Odinfile to build (and in fact requires itself to be present for
+odin-lua to work, so it needs to be compiled by hand the first time
+anyway).  It's just one C file, though, so it shouldn't be too hard
+to make a shared object out of it, linked to the glib and lua libraries.
 
 No support is provided for Type Conversion Macros, Byte Order Macros,
 Numerical Definitions, or Miscellaneous Macros, as they are all
@@ -69,7 +73,7 @@ Eventually, this may be split into multiple modules, so that uselses stuff
 can be removed.  However, removing useless stuff from GLib is not easy,
 so having Lua bindings for what's there is not necessarily harmful.
 
-This documentation was built as follows:
+This documentation was built as follows (again, this is in the Odinfile):
 
      ldoc.lua -p lua-glib -o lua-glib -d . -f discount -t 'Lua GLib Library' lua-glib.c
 
@@ -103,6 +107,14 @@ linking with shared libraries.
 
 Note that since LDoc does not support error return sections, I have used
 exception sections (@raise) instead.
+
+For GitHub, I have converted this documentation to textile using pandoc
+and a bit of filtering.  See the Lua filtering code in Odinfile; this
+almost certainly needs Odin for best results.  I chose textile because
+markdown doesn't do tables (at least not in a way that's compatible with
+anything pandoc can produce). and all the other formats produced plain
+ASCII on GitHub, in spite of claims to the contrary at
+https://www.github.com/github/markdown/.
 
 Questions/comments to darktjm@gmail.com.
 
@@ -2484,7 +2496,7 @@ static int glib_build_path(lua_State *L)
     return 1;
 }
 
-/**
+/***
 Canonicalize a path name.
 This does not wrap anything in GLib, as GLib does not provide such a function.
 This function converts a path name to an absolute path name with all relative
@@ -2693,12 +2705,12 @@ static int glib_path_canonicalize(lua_State *L)
     wp = wfp;
 
     if(wp[0] == '\\' && wp[1] == '\\') {
-        /** Get rid of \\?\ and \\.\ prefixes on drive-letter paths */
+        /* Get rid of \\?\ and \\.\ prefixes on drive-letter paths */
 	if((wp[2] == '?' || wp[2] == '.') && wp[3] == '\\' &&
 	   wp[5] == ':')
 	    wp += 4;
 	else if(!wcsncmp(wp + 2, L"?\\UNC\\", 6)) {
-	    /** Get rid of \\?\UNC on drive-letter and UNC paths */
+	    /* Get rid of \\?\UNC on drive-letter and UNC paths */
 	    if(wp[9] == ':' && wp[10] == '\\')
 		wp += 8;
 	    else {
@@ -2706,7 +2718,7 @@ static int glib_path_canonicalize(lua_State *L)
 		*wp = '\\';
 	    }
 	} else if(wp[2] == '?' || wp[2] == '.') {
-    /** Anything other than UNC and drive-letter is something we don't
+    /* Anything other than UNC and drive-letter is something we don't
      * understand
      */
 	    lua_pushnil(L);
@@ -2716,9 +2728,9 @@ static int glib_path_canonicalize(lua_State *L)
     }
     /* at this point, the path should either be \\... or <drive>:\... */
     if(*wp == '\\')
-        /** OK -- UNC */;
+        /* OK - UNC */;
     else if (g_ascii_isalpha(*wp) && *wp < 256 && wp[1] == ':') {
-        /** OK -- drive letter -- unwind subst'ing */
+        /* OK - drive letter - unwind subst-ing */
 	wchar_t *buf;
 	int buflen = 16;
 	buf = g_malloc(16 * sizeof(*buf));
@@ -2792,7 +2804,7 @@ static int glib_path_canonicalize(lua_State *L)
     }
 
     {
-	/** Canonicalise case and 8.3-ness */
+	/* Canonicalise case and 8.3-ness */
 	pl = GetLongPathNameW(wp, NULL, 0);
 	if(!pl) {
 	    char *msg = g_win32_error_message(GetLastError());
@@ -3076,7 +3088,7 @@ static int glib_timer_new(lua_State *L)
     return 1;
 }
 
-/****
+/***
 @type timer
 */
 /***
@@ -3920,14 +3932,15 @@ static int read_pipe(lua_State *L, spawn_state *st, int whichout,
     }
     if(!nargs) {
 	const char *s = memchr(oi->buf.str, '\n', oi->buf.len);
-	if(s && s < oi->buf.str + oi->buf.len - 1) {
+	if(s) {
 	    gsize len = (gsize)(s - oi->buf.str);
 	    /* since we're reading lines, it's safe to strip trailing CR */
 	    if(len && s[-1] == '\r')
 		len--;
 	    lua_pushlstring(L, oi->buf.str, len);
-	    oi->buf.len -= len;
-	    memmove(oi->buf.str, s + 1, oi->buf.len);
+	    oi->buf.len -= (int)(s - oi->buf.str) + 1;
+	    if(oi->buf.len)
+		memmove(oi->buf.str, s + 1, oi->buf.len);
 	} else {
 	    gsize len = oi->buf.len;
 	    if(len && oi->buf.str[len - 1] == '\r')
