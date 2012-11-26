@@ -1,0 +1,5117 @@
+h1. Module @glib@
+
+This package wraps the GLib library fairly thinly.
+
+Unlike other lua-glib implementations, this is not meant to be a stepping stone for GTK+ support. It is meant to be a portability and utility library. There are other projects which provide support for GTK+ and other various derivatives of GLib. The specific version against this was developed was 2.32.4; I have scanned the documentation for added symbols, and it should compile as far back as version 2.26 with a few minor missing features (search for “available with GLib” or “ignored with GLib”). The reason 2.26 was chosen is that it is the oldest version permitted with the GLIB&#95;VERSION&#95;MIN&#95;REQUIRED macro, even though I could've gone as low as 2.18 without significant loss of functionality.
+
+This package was split off from my odin-lua project, so it uses an Odinfile to build (and in fact requires itself to be present for odin-lua to work, so it needs to be compiled by hand the first time anyway). It's just one C file, though, so it shouldn't be too hard to make a shared object out of it, linked to the glib and lua libraries.
+
+No support is provided for Type Conversion Macros, Byte Order Macros, Numerical Definitions, or Miscellaneous Macros, as they are all either too low-level or C-specific. No support is provided for Atomic Operations, Threads, Thread Pools, or Asynchronous queues; use a Lua-specific threading module instead (such as Lanes). No support is provided for The Main Event Loop, as its utility versus implementation effort seems low. No support is provided for Dynamic Loading of Modules, because lua already does that. No support is provided for Memory Allocation or Memory Slices, since you shouldn't be doing that in Lua. IO Channels also seem below my minimum utility-to-effort ratio. There is no direct support for the Error Reporting, Message Output, and Debugging Functions. There is no support for replacing the log handlers or setting the fatality flags in log messages, although that may come some day. The String Utility Functions are C-specific, and not supported. The Hook Functions seem useless for Lua. The Lexical Scanner is not very configurable and hard to bind to Lua; use a made-for-Lua scanner instead like Lpeg. No support is provided for the Commandline option parser, as adapting it to Lua would remove most of its convenience and there are plenty of other similar libraries for lua. The Glob-style pattern matching is too simplistic and can easily be emulated using regex-style patterns. The UNIX-specific and Windows-specific functions are not supported, since such blatantly non-portable functions should not be used. The Testing framework is not supported, because a Lua-specific framework would be more suited to the task. None of the GLib Data Types are supported, although there may be merit in eventually supporting the GVariant type somewhat.
+
+The only Standard Macros supported are the OS and path separator macros. Date and Time Functions are mostly unsupported; the only one which could not be replaced by a native Lua time library is usleep, which is supported. The GTimeZone and GDateTime sections are not supported for the same reason.
+
+The sections which are mostly supported are Version Information, Character Set Conversion (including streaming), Unicode Manipulation (skipping the low-level support functions and others which would really need low-level Lua Unicode support), Base64 Encoding (including streaming), Data Checksums (including streaming), Secure HMAC Digets (including streaming), Internationalization (including gettext macros, but excluding some of the low-level support functions), Miscellaneous Utility Functions (except for bit operations, which really need to be added to lua-bit, and a few other low-level/internal-use type functions), Timers, Spawning Processes (including some extra features), File Utilities (except a few MS library compatibility functions and memory mapped files), URI Functions, Hostname Utilities, Shell-related Utilities, Perl-compatible regular expressions, Simle XML Subset Parser (without vararg functions since building varargs generically is not possible), Key-value file parser, and Bookmark file parser.
+
+Eventually, this may be split into multiple modules, so that uselses stuff can be removed. However, removing useless stuff from GLib is not easy, so having Lua bindings for what's there is not necessarily harmful.
+
+This documentation was built as follows:
+
+bc.  ldoc.lua -p lua-glib -o lua-glib -d . -f discount -t 'Lua GLib Library' lua-glib.c
+
+
+
+Using "ldoc-1.2.0":http://stevedonovan.github.com/ldoc, with a patch to escape underscores in in-line references:
+
+bc. --- ldoc/markup.lua
++++ ldoc/markup.lua
+@@ -42,6 +42,9 @@
+    if backtick_references then
+       res  = res:gsub('`([^`]+)`',function(name)
+          local ref,err = markup.process_reference(name)
++         if not plain and ref then -- a nastiness with markdown.lua and underscores
++            name = name:gsub('_','\\_')
++         end
+          if ref then
+             return ('<a href="%s">%s</a> '):format(ldoc.href(ref),name)
+          else
+
+
+
+And "lua-discount":http://asbradbury.org/projects/lua-discount/, changed to use the system discount library:
+
+bc. rm -f *.h
+make DISCOUNT_OBJS= LIBS=-lmarkdown
+
+
+
+The "discount":http://www.pell.portland.or.us/~orc/Code/discount/ version I used was 2.1.5a, with everything enabled, and compiled with -fPIC to enable linking with shared libraries.
+
+Note that since LDoc does not support error return sections, I have used exception sections (&#64;raise) instead.
+
+Questions/comments to darktjm&#64;gmail.com.
+
+h2. "Version Information":#Version_Information
+
+
+|"version":#version|GLib version string.|
+
+
+h2. "Standard Macros":#Standard_Macros
+
+
+|"os":#os|Operating system.|
+|"dir&#95;separator":#dir_separator|Directory separator.|
+|"searchpath&#95;separator":#searchpath_separator|Path list separator|
+
+
+h2. "Message Logging":#Message_Logging
+
+
+|"log ([domain][, level], msg)":#log|Log a message, GLib-style.|
+
+
+h2. "Character Set Conversion":#Character_Set_Conversion
+
+
+|"&#95;convert&#95; ([str])":#_convert_|Stream character conversion function returned by "convert":#convert .|
+|"convert ([str[, to[, from[, fallback]]]])":#convert|Convert strings from one character set to another.|
+
+
+h2. "Unicode Manipulation":#Unicode_Manipulation
+
+
+|"validate ( c )":#validate|Check if unicode character is valid.|
+|"isalpha ( c )":#isalpha|Check if Unicode character is alphabetic.|
+|"iscntrl ( c )":#iscntrl|Check if Unicode character is a control character.|
+|"isdefined ( c )":#isdefined|Check if Unicode character is explicitly defined in the Unicode standard.|
+|"isdigit ( c )":#isdigit|Check if Unicode character is a decimal digit.|
+|"isgraph ( c )":#isgraph|Check if Unicode character is a visible, printable character.|
+|"islower ( c )":#islower|Check if Unicode character is a lower-case alphabetic character.|
+|"ismark ( c )":#ismark|Check if Unicode character is a mark.|
+|"isprint ( c )":#isprint|Check if Unicode character is printable.|
+|"ispunct ( c )":#ispunct|Check if Unicode character is a punctuation or symbol character.|
+|"isspace ( c )":#isspace|Check if Unicode character is whitespace.|
+|"istitle ( c )":#istitle|Check if Unicode character is titlecase.|
+|"isupper ( c )":#isupper|Check if Unicode character is upper-case.|
+|"isxdigit ( c )":#isxdigit|Check if Unicode character is hexadecimal digit.|
+|"iswide ( c )":#iswide|Check if Unicode character is wide.|
+|"iswide&#95;cjk ( c )":#iswide_cjk|Check if Unicode character is wide in legacy East Asian locales.|
+|"iszerowidth ( c )":#iszerowidth|Check if Unicode character is zero-width.|
+|"toupper ( c )":#toupper|Convert Unicode character to upper-case.|
+|"tolower ( c )":#tolower|Convert Unicode character to lower-case.|
+|"totitle ( c )":#totitle|Convert Unicode character to title case.|
+|"digit&#95;value ( c )":#digit_value|Convert digit to its numeric value.|
+|"xdigit&#95;value ( c )":#xdigit_value|Convert hexadecimal digit to its numeric value.|
+|"type ( c )":#type|Find Unicode character class.|
+|"break&#95;type ( c )":#break_type|Find Unicode character's line break classification.|
+|"get&#95;mirror&#95;char ( c )":#get_mirror_char|Find Unicode mirroring character.|
+|"get&#95;script ( c )":#get_script|Find ISO 15924 script for a Unicode character.|
+|"utf8&#95;sub (s[, first[, last]])":#utf8_sub|Obtain a substring of a utf-8-encoded string.|
+|"utf8&#95;len (s)":#utf8_len|Obtain the number of code points in a utf-8-encoded string.|
+|"utf8&#95;validate (s)":#utf8_validate|Check if a string is valid UTF-8.|
+|"utf8&#95;strup (s)":#utf8_strup|Convert UTF-8 string to upper-case.|
+|"utf8&#95;strdown (s)":#utf8_strdown|Convert UTF-8 string to lower-case.|
+|"utf8&#95;casefold (s)":#utf8_casefold|Convert UTF-8 string to case-independent form.|
+|"utf8&#95;normalize (s[, compose[, compatible]])":#utf8_normalize|Perform standard Unicode normalization on a UTF-8 string.|
+|"utf8&#95;collate (s1, s2)":#utf8_collate|Compare UTF-8 strings for collation.|
+|"utf8&#95;collate&#95;key (s)":#utf8_collate_key|Create a comparison key for a UTF-8 string.|
+|"utf8&#95;collate&#95;key&#95;for&#95;filename (s)":#utf8_collate_key_for_filename|Create a comparison key for a UTF-8 filename string.|
+|"utf8&#95;to&#95;utf16 (s)":#utf8_to_utf16|Convert a UTF-8 string to UTF-16.|
+|"utf8&#95;to&#95;ucs4 (s)":#utf8_to_ucs4|Convert a UTF-8 string to UCS-4.|
+|"utf16&#95;to&#95;utf8 (s)":#utf16_to_utf8|Convert a UTF-16 string to UTF-8.|
+|"utf16&#95;to&#95;ucs4 (s)":#utf16_to_ucs4|Convert a UTF-16 string to UCS-4.|
+|"ucs4&#95;to&#95;utf16 (s)":#ucs4_to_utf16|Convert a UCS-4 string to UTF-16.|
+|"ucs4&#95;to&#95;utf8 (s)":#ucs4_to_utf8|Convert a UCS-4 string to UTF-8.|
+|"to&#95;utf8 ( c )":#to_utf8|Convert a UCS-4 code point to UTF-8.|
+
+
+h2. "Base64 Encoding":#Base___Encoding
+
+
+|"&#95;base64&#95;encode&#95; ([s])":#_base64_encode_|Stream Base64-encoding function returned by "base64&#95;encode":#base64_encode .|
+|"base64&#95;encode ([s])":#base64_encode|Base64-encode a string.|
+|"&#95;base64&#95;decode&#95; ([s])":#_base64_decode_|Stream Base64-decoding function returned by "base64&#95;decode":#base64_decode .|
+|"base64&#95;decode ([s])":#base64_decode|Base64-decode a string.|
+
+
+h2. "Data Checksums":#Data_Checksums
+
+
+|"&#95;sum&#95; ([s][, raw])":#_sum_|Stream checksum/hash calculation function type.|
+|"md5sum ([s[, raw]])":#md5sum|Compute MD5 checksum of a string.|
+|"sha1sum ([s[, raw]])":#sha1sum|Compute SHA1 checksum of a string.|
+|"sha256sum ([s[, raw]])":#sha256sum|Compute SHA256 checksum of a string.|
+
+
+h2. "Secure HMAC Digests":#Secure_HMAC_Digests
+
+
+|"&#95;hmac&#95; ([s][, raw])":#_hmac_|Stream HMAC calculation function.|
+|"md5hmac (key[, s[, raw]])":#md5hmac|Compute secure HMAC digest using MD5.|
+|"sha1hmac (key[, s[, raw]])":#sha1hmac|Compute secure HMAC digest using SHA1.|
+|"sha256hmac (key[, s[, raw]])":#sha256hmac|Compute secure HMAC digest using SHA256.|
+
+
+h2. "Internationalization":#Internationalization
+
+
+|"&#95; (s)":#_|Replace text with its translation.|
+|"Q&#95; (s)":#Q_|Replace text and context with its translation.|
+|"C&#95; (c, s)":#C_|Replace text and context with its translation.|
+|"N&#95; (s)":#N_|Mark text for translation.|
+|"NC&#95; (c, s)":#NC_|Mark text for translation with context.|
+|"get&#95;locale&#95;variants ([locale])":#get_locale_variants|Obtain list of valid locale names.|
+
+
+h2. "Date and Time Functions":#Date_and_Time_Functions
+
+
+|"sleep (t)":#sleep|Suspend execution for some seconds.|
+|"usleep (t)":#usleep|Suspend execution for some microseconds.|
+
+
+h2. "Random Numbers":#Random_Numbers
+
+
+|"random ([low[, high]])":#random|Obtain a psuedorandom number.|
+|"rand&#95;new ([seed])":#rand_new|Obtain a psuedorandom number generator, given a seed.|
+
+
+h2. "Miscellaneous Utility Functions":#Miscellaneous_Utility_Functions
+
+
+|"application&#95;name ([name])":#application_name|Set or get localized application name.|
+|"prgname ([name])":#prgname|Set or get program name.|
+|"getenv (name)":#getenv|Get environment variable value.|
+|"setenv (name, value[, replace])":#setenv|Set environment variable value.|
+|"unsetenv (name)":#unsetenv|Remove environment variable.|
+|"listenv ()":#listenv|Obtain names of all environment variables.|
+|"get&#95;user&#95;name ()":#get_user_name|Obtain system user name for current user.|
+|"get&#95;real&#95;name ()":#get_real_name|Obtain full user name for current user.|
+|"get&#95;dir&#95;name (d)":#get_dir_name|Obtain a standard directory name.|
+|"get&#95;host&#95;name ()":#get_host_name|Obtain current host name.|
+|"get&#95;current&#95;dir ()":#get_current_dir|Obtain current working directory.|
+|"path&#95;is&#95;absolute (d)":#path_is_absolute|Check if a directory is absolute.|
+|"path&#95;split&#95;root (d)":#path_split_root|Split the root part from a path.|
+|"path&#95;get&#95;basename (d)":#path_get_basename|Obtain the last element of a path.|
+|"path&#95;get&#95;dirname (d)":#path_get_dirname|Obtain all but the last element of a path.|
+|"build&#95;filename (...)":#build_filename|Construct a file name from its path constituents.|
+|"build&#95;path (sep, ...)":#build_path|Construct a path from its constituents.|
+|"path&#95;canonicalize (f)":#path_canonicalize|Canonicalize a path name.|
+|"qsort (t[, cmp])":#qsort|Sort a table using a stable quicksort algorithm.|
+|"cmp (a, b)":#cmp|Compare two objects.|
+
+
+h2. "Timers":#Timers
+
+
+|"timer&#95;new ()":#timer_new|Create a stopwatch-like timer.|
+
+
+h2. "Class timer":#Class_timer
+
+
+|"timer:start ()":#timer:start|Start or reset the timer.|
+|"timer:stop ()":#timer:stop|Stop the timer if it is running.|
+|"timer:continue ()":#timer:continue|Resume the timer if it is stopped.|
+|"timer:elapsed ()":#timer:elapsed|Return the amount of time counted so far.|
+
+
+h2. "Spawning Processes":#Spawning_Processes
+
+
+|"spawn (args)":#spawn|Run a command asynchronously.|
+
+
+h2. "Class process":#Class_process
+
+
+|"process:read&#95;ready (...)":#process:read_ready|Wait for input to be available from process standard output.|
+|"process:read&#95;err&#95;ready (...)":#process:read_err_ready|Wait for input to be available from process standard error.|
+|"process:read (...)":#process:read|Read data from a process' standard output.|
+|"process:read&#95;err (...)":#process:read_err|Read data from a process' standard error.|
+|"process:lines ()":#process:lines|Return an iterator which reads lines from the process' standard output.|
+|"process:lines&#95;err ()":#process:lines_err|Return an iterator which reads lines from the process' standard error.|
+|"process:write&#95;ready ()":#process:write_ready|Check if writing to the process' standard input will block.|
+|"process:write (...)":#process:write|Write to a process' standard input.|
+|"process:close ()":#process:close|Close the process' standard input channel.|
+|"process:io&#95;wait ([check&#95;in[, check&#95;out[, check&#95;err]]])":#process:io_wait|Check for process activity.|
+|"process:pid ()":#process:pid|Return the glib process ID for the process.|
+|"process:status ()":#process:status|Return the status of the running process.|
+|"process:wait ()":#process:wait|Wait for process termination and clean up.|
+
+
+h2. "File Utilities":#File_Utilities
+
+
+|"file&#95;get (name)":#file_get|Return contents of a file as a string.|
+|"file&#95;set (name, contents)":#file_set|Set contents of file to a string.|
+|"is&#95;file (name)":#is_file|Test if the given path points to a file.|
+|"is&#95;dir (name)":#is_dir|Test if the given path points to a directory.|
+|"is&#95;symlink (name)":#is_symlink|Test if the given path points to a symbolic link.|
+|"is&#95;exec (name)":#is_exec|Test if the given path points to an executable file.|
+|"exists (name)":#exists|Test if the given path points to a file or directory.|
+|"umask ([mask])":#umask|Change default file and directory creation permissions mask.|
+|"mkstemp (tmpl[, perm])":#mkstemp|Create a unique temporary file from a pattern.|
+|"open&#95;tmp ([tmpl])":#open_tmp|Create a unique temporary file in the standard temporary directory.|
+|"read&#95;link (name)":#read_link|Read the contents of a soft link.|
+|"mkdir&#95;with&#95;parents (name[, mode])":#mkdir_with_parents|Create a directory and any required parent directories.|
+|"mkdtemp (tmpl[, mode])":#mkdtemp|Create a unique tempoarary directory from a pattern.|
+|"dir&#95;make&#95;tmp ([tmpl])":#dir_make_tmp|Create a unique temporary directory in the standard temporary directory.|
+|"dir (d)":#dir|Returns an iterator which lists entries in a directory.|
+|"rename (old, new)":#rename|Rename a file sytem entity.|
+|"mkdir (name[, mode])":#mkdir|Create a directory.|
+|"stat (name[, fields])":#stat|Retrieve information on a file system entry.|
+|"remove (name)":#remove|Remove a file sytem entity.|
+|"chmod (name, perm)":#chmod|Change filesystem entry permissions.|
+|"can&#95;read (name)":#can_read|Test if fileystem object can be read.|
+|"can&#95;write (name)":#can_write|Test if fileystem object can be written to.|
+|"chdir (dir)":#chdir|Change current working directory.|
+|"utime (name[, atime[, mtime]])":#utime|Change timestamp on filesystem object.|
+|"link (target, name[, soft])":#link|Create a link.|
+
+
+h2. "URI Functions":#URI_Functions
+
+
+|"uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path":#uri_reserved_chars_allowed_in_path|Allowed characters in a path.|
+|"uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path&#95;element":#uri_reserved_chars_allowed_in_path_element|Allowed characters in path elements.|
+|"uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;userinfo":#uri_reserved_chars_allowed_in_userinfo|Allowed characters in userinfo (RFC 3986).|
+|"uri&#95;reserved&#95;chars&#95;generic&#95;delimiters":#uri_reserved_chars_generic_delimiters|Generic delimiter characters (RFC 3986).|
+|"uri&#95;reserved&#95;chars&#95;subcomponent&#95;delimiters":#uri_reserved_chars_subcomponent_delimiters|Subcomponent delimiter characters (RFC 3986).|
+|"uri&#95;parse&#95;scheme (uri)":#uri_parse_scheme|Extract scheme from URI.|
+|"uri&#95;escape&#95;string (s[, allow[, utf8]])":#uri_escape_string|Escapes a string for use in a URI.|
+|"uri&#95;unescape&#95;string (s[, illegal])":#uri_unescape_string|Unescapes an escaped string.|
+|"uri&#95;list&#95;extract&#95;uris (list)":#uri_list_extract_uris|Splits an URI list conforming to the text/uri-list MIME type (RFC 2483).|
+|"filename&#95;from&#95;uri (uri)":#filename_from_uri|Converts an ASCII-encoded URI to a local filename.|
+|"filename&#95;to&#95;uri (file[, host])":#filename_to_uri|Converts an absolute filename to an escaped ASCII-encoded URI.|
+
+
+h2. "Hostname Utilities":#Hostname_Utilities
+
+
+|"hostname&#95;to&#95;ascii (hostname)":#hostname_to_ascii|Convert a host name to its canonical ASCII form.|
+|"hostname&#95;to&#95;unicode (hostname)":#hostname_to_unicode|Convert a host name to its canonical Unicode form.|
+|"hostname&#95;is&#95;non&#95;ascii (hostname)":#hostname_is_non_ascii|Check if a host name contains Unicode characters.|
+|"hostname&#95;is&#95;ascii&#95;encoded (hostname)":#hostname_is_ascii_encoded|Check if a host name contains ASCII-encoded Unicode characters.|
+|"hostname&#95;is&#95;ip&#95;address (hostname)":#hostname_is_ip_address|Check if a string is an IPv4 or IPv6 numeric address.|
+
+
+h2. "Shell-related Utilities":#Shell_related_Utilities
+
+
+|"shell&#95;parse&#95;argv (cmdline)":#shell_parse_argv|Parse a command line into an argument vector, but without variable and glob pattern expansion.|
+|"shell&#95;quote (s)":#shell_quote|Quote a string so it is interpreted unmodified as a shell argument.|
+|"shell&#95;unquote (s)":#shell_unquote|Unquote a string quoted for use as a shell argument.|
+
+
+h2. "Perl-compatible Regular Expressions":#Perl_compatible_Regular_Expressions
+
+
+|"regex&#95;new (pattern[, cflags[, mflags]])":#regex_new|Compile a regular expression for use in matching functions.|
+|"regex&#95;escape&#95;string (s)":#regex_escape_string|Escapes a string so it is a literal in a regular expression.|
+
+
+h2. "Class regex":#Class_regex
+
+
+|"regex:get&#95;pattern ()":#regex:get_pattern|Get the pattern string used to create this regex.|
+|"regex:get&#95;max&#95;backref ()":#regex:get_max_backref|Get the highest back reference in the pattern.|
+|"regex:get&#95;capture&#95;count ()":#regex:get_capture_count|Get the number of capturing subpatterns in the pattern.|
+|"regex:get&#95;string&#95;number (name)":#regex:get_string_number|Get the number of the capturing subexpression with the given name.|
+|"regex:get&#95;compile&#95;flags ()":#regex:get_compile_flags|Get the names of all compile flags set when regex was created.|
+|"regex:get&#95;match&#95;flags ()":#regex:get_match_flags|Get the names of all matching flags set when regex was created.|
+|"regex:find (s[, start[, mflags]])":#regex:find|Search for a match in a string.|
+|"regex:tfind (s[, start[, mflags]])":#regex:tfind|Search for a match in a string.|
+|"regex:match (s[, start[, mflags]])":#regex:match|Search for a match in a string.|
+|"regex:gmatch (s[, start[, mflags]])":#regex:gmatch|Search for all matches in a string.|
+|"regex:gfind (s[, start[, mflags]])":#regex:gfind|Search for all matches in a string.|
+|"regex:gtfind (s[, start[, mflags]])":#regex:gtfind|Search for all matches in a string.|
+|"regex:split (s[, start[, mflags[, max]]])":#regex:split|Split a string with a regular expression separator.|
+|"regex:gsub (s, repl[, start[, n[, mflags]]])":#regex:gsub|Replace occurrences of regular expression in string.|
+
+
+h2. "Simple XML Subset Parser":#Simple_XML_Subset_Parser
+
+
+|"markup&#95;escape&#95;text (s)":#markup_escape_text|Escape text so GMarkup XML parsing will return it to original.|
+|"&#95;gmarkup&#95;start&#95;element&#95; (ctx, name, attr&#95;names, attr&#95;values)":#_gmarkup_start_element_|The function called when an opening tag of an element is seen.|
+|"&#95;gmarkup&#95;end&#95;element&#95; (ctx, name[, pop])":#_gmarkup_end_element_|The function called when an ending tag of an element is seen.|
+|"&#95;gmarkup&#95;text&#95; (ctx, text)":#_gmarkup_text_|The function called when text within an element is seen.|
+|"&#95;gmarkup&#95;passthrough&#95; (ctx, text)":#_gmarkup_passthrough_|The function called when unprocessed text is seen.|
+|"&#95;gmarkup&#95;error&#95; (ctx, text)":#_gmarkup_error_|The function called when an error occurs during parsing.|
+|"markup&#95;parse&#95;context&#95;new (options)":#markup_parse_context_new|Create GMarkup parser.|
+
+
+h2. "Class markup&#95;parse&#95;context":#Class_markup_parse_context
+
+
+|"markup&#95;parse&#95;context:end&#95;parse ()":#markup_parse_context:end_parse|Finish parsing.|
+|"markup&#95;parse&#95;context:get&#95;position ()":#markup_parse_context:get_position|Obtain current position in source text.|
+|"markup&#95;parse&#95;context:get&#95;element ()":#markup_parse_context:get_element|Obtain the name of the current element being processed.|
+|"markup&#95;parse&#95;context:get&#95;element&#95;stack ()":#markup_parse_context:get_element_stack|Obtain the complete path of element names to the current element being processed.|
+|"markup&#95;parse&#95;context:parse (s)":#markup_parse_context:parse|Parse some text.|
+
+
+h2. "Key-value file parser":#Key_value_file_parser
+
+
+|"key&#95;file&#95;new ()":#key_file_new|Create a new, empty key file.|
+
+
+h2. "Class key&#95;file":#Class_key_file
+
+
+|"key&#95;file:set&#95;list&#95;separator (sep)":#key_file:set_list_separator|Sets character to separate values in lists.|
+|"key&#95;file:load&#95;from&#95;file (f[, dirs[, keep&#95;com[, keep&#95;trans]]])":#key_file:load_from_file|Load a file.|
+|"key&#95;file:load&#95;from&#95;data (s[, keep&#95;com[, keep&#95;trans]])":#key_file:load_from_data|Load data.|
+|"key&#95;file:to&#95;data ()":#key_file:to_data|Convert entire key file to a string.|
+|"key&#95;file:get&#95;start&#95;group ()":#key_file:get_start_group|Get the start group of the key file.|
+|"key&#95;file:get&#95;groups ()":#key_file:get_groups|Get the names of all groups in the key file.|
+|"key&#95;file:get&#95;keys (group)":#key_file:get_keys|Get the names of all keys in a group.|
+|"key&#95;file:has&#95;group (group)":#key_file:has_group|Check if group exists.|
+|"key&#95;file:has&#95;key (group, key)":#key_file:has_key|Check if key exists.|
+|"key&#95;file:raw&#95;get (group, key)":#key_file:raw_get|Obtain raw value of a key.|
+|"key&#95;file:get (group, key[, locale])":#key_file:get|Obtain value of a key.|
+|"key&#95;file:get&#95;boolean (group, key)":#key_file:get_boolean|Obtain value of a boolean key.|
+|"key&#95;file:get&#95;number (group, key)":#key_file:get_number|Obtain value of a numeric key.|
+|"key&#95;file:get&#95;list (group, key[, locale])":#key_file:get_list|Obtain value of a string list key.|
+|"key&#95;file:get&#95;boolean&#95;list (group, key)":#key_file:get_boolean_list|Obtain value of a boolean list key.|
+|"key&#95;file:get&#95;number&#95;list (group, key)":#key_file:get_number_list|Obtain value of a number list key.|
+|"key&#95;file:get&#95;comment ([group[, key]])":#key_file:get_comment|Obtain comment above a key or group.|
+|"key&#95;file:raw&#95;set (group, key, value)":#key_file:raw_set|Set raw value of a key.|
+|"key&#95;file:set (group, key, value[, locale])":#key_file:set|Set value of a key.|
+|"key&#95;file:set&#95;boolean (group, key, value)":#key_file:set_boolean|Set value of a boolean key.|
+|"key&#95;file:set&#95;number (group, key, value)":#key_file:set_number|Set value of a numeric key.|
+|"key&#95;file:set&#95;list (group, key, value[, locale])":#key_file:set_list|Set value of a string list key.|
+|"key&#95;file:set&#95;boolean&#95;list (group, key, value)":#key_file:set_boolean_list|Set value of a boolean list key.|
+|"key&#95;file:set&#95;number&#95;list (group, key)":#key_file:set_number_list|Set value of a number list key.|
+|"key&#95;file:set&#95;comment (comment[, group[, key]])":#key_file:set_comment|Set comment above a key or group.|
+|"key&#95;file:remove (group[, key])":#key_file:remove|Remove a group or key.|
+|"key&#95;file:remove&#95;comment ([group[, key]])":#key_file:remove_comment|Remove comment above a key or group.|
+
+
+h2. "Bookmark file parser":#Bookmark_file_parser
+
+
+|"bookmark&#95;file&#95;new ()":#bookmark_file_new|Create a new, empty bookmark file.|
+
+
+h2. "Class bookmark&#95;file":#Class_bookmark_file
+
+
+|"bookmark&#95;file:load&#95;from&#95;file (f[, use&#95;dirs])":#bookmark_file:load_from_file|Load a file.|
+|"bookmark&#95;file:load&#95;from&#95;data (s)":#bookmark_file:load_from_data|Load data.|
+|"bookmark&#95;file:to&#95;data ()":#bookmark_file:to_data|Convert bookmark file to a string.|
+|"bookmark&#95;file:to&#95;file (f)":#bookmark_file:to_file|Write bookmark file to a file.|
+|"bookmark&#95;file:has&#95;item (uri)":#bookmark_file:has_item|Check if bookmark file has given URI.|
+|"bookmark&#95;file:has&#95;group (uri, group)":#bookmark_file:has_group|Check if bookmark file has given URI in a given group.|
+|"bookmark&#95;file:has&#95;application (uri, app)":#bookmark_file:has_application|Check if bookmark file has given URI registered by a given application.|
+|"bookmark&#95;file:&#95;&#95;len ()":#bookmark_file:__len|Get the number of bookmarks.|
+|"bookmark&#95;file:uris ()":#bookmark_file:uris|Get all URIs.|
+|"bookmark&#95;file:title (uri)":#bookmark_file:title|Get title for URI|
+|"bookmark&#95;file:description (uri)":#bookmark_file:description|Get description for URI|
+|"bookmark&#95;file:mime&#95;type (uri)":#bookmark_file:mime_type|Get MIME type for URI|
+|"bookmark&#95;file:is&#95;private (uri)":#bookmark_file:is_private|Get private flag for URI|
+|"bookmark&#95;file:icon (uri)":#bookmark_file:icon|Get icon for URI.|
+|"bookmark&#95;file:added (uri)":#bookmark_file:added|Get time URI was added.|
+|"bookmark&#95;file:modified (uri)":#bookmark_file:modified|Get time URI was last modified.|
+|"bookmark&#95;file:visited (uri)":#bookmark_file:visited|Get time URI was last visited.|
+|"bookmark&#95;file:groups (uri)":#bookmark_file:groups|Get list of groups to which URI belongs.|
+|"bookmark&#95;file:applications (uri)":#bookmark_file:applications|Get list of applications which registered this URI.|
+|"bookmark&#95;file:boomark&#95;file:app&#95;info (uri, app)":#bookmark_file:boomark_file:app_info|Obtain registration information for application which registered URI.|
+|"bookmark&#95;file:set&#95;title ([uri], title)":#bookmark_file:set_title|Set title for URI|
+|"bookmark&#95;file:set&#95;description ([uri], desc)":#bookmark_file:set_description|Set description for URI|
+|"bookmark&#95;file:set&#95;mime&#95;type (uri, mime&#95;type)":#bookmark_file:set_mime_type|Set MIME type for URI|
+|"bookmark&#95;file:set&#95;is&#95;private (uri, private)":#bookmark_file:set_is_private|Set private flag for URI|
+|"bookmark&#95;file:set&#95;icon (uri, icon, mime&#95;type)":#bookmark_file:set_icon|Set icon for URI.|
+|"bookmark&#95;file:set&#95;added (uri, time)":#bookmark_file:set_added|Set time URI was added.|
+|"bookmark&#95;file:set&#95;modified (uri, time)":#bookmark_file:set_modified|Set time URI was modified.|
+|"bookmark&#95;file:set&#95;visited (uri, time)":#bookmark_file:set_visited|Set time URI was visited.|
+|"bookmark&#95;file:set&#95;groups (uri)":#bookmark_file:set_groups|Set list of groups to which URI belongs.|
+|"bookmark&#95;file:set&#95;app&#95;info (uri, app, exec[, rcount[, stamp]])":#bookmark_file:set_app_info|Set registration information for application which registered URI.|
+|"bookmark&#95;file:add&#95;group (uri, group)":#bookmark_file:add_group|Add a group to the list of groups URI belongs to.|
+|"bookmark&#95;file:add&#95;application (uri, app, exec)":#bookmark_file:add_application|Add an application to the list of applications that registered this URI.|
+|"bookmark&#95;file:remove&#95;group (uri, group)":#bookmark_file:remove_group|Remove a group from the list of groups URI belongs to.|
+|"bookmark&#95;file:remove&#95;application (uri, app)":#bookmark_file:remove_application|Remove an application from the list of applications that registered this URI.|
+|"bookmark&#95;file:remove (uri)":#bookmark_file:remove|Remove URI.|
+|"bookmark&#95;file:move (uri, new)":#bookmark_file:move|Change URI, retaining group and application information.|
+
+
+
+ 
+
+
+h2. <a name="Version_Information"/>Version Information
+
+<dl>
+<dt> <a name="version"/>version*</dt>
+<dd><p>GLib version string. Version of running glib (not the one it was compiled against). The format is _major_._minor_._micro_.</p>
+h3. Usage:
+
+<blockquote>
+
+bc(example). gver = tonumber(glib.version:match '(.*)%.')
+print(gver > 2.30)
+
+
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Standard_Macros"/>Standard Macros
+
+<dl>
+<dt> <a name="os"/>os*</dt>
+<dd>Operating system. A string representing the operating system: ‘win32', ‘beos', ‘unix', ‘unknown'</dd>
+<dt> <a name="dir&#95;separator"/>dir&#95;separator*</dt>
+<dd>Directory separator. Unlike GLib's directory separator, this includes both valid values under Win32.</dd>
+<dt> <a name="searchpath&#95;separator"/>searchpath&#95;separator*</dt>
+<dd>Path list separator</dd>
+</dl>
+
+h2. <a name="Message_Logging"/>Message Logging
+
+<dl>
+<dt> <a name="log"/>log ([domain][, level], msg)*</dt>
+<dd><p>Log a message, GLib-style. This is a wrapper for @g_log()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@domain@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The log domain. This parameter may be absent to use @G_LOG_DOMAIN@.</li>
+<li><p>@level@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The log level. Acceptable values are:</p>
+<ul>
+<li>‘crit/'critical'</li>
+<li>‘debug'</li>
+<li>‘err'/‘error'</li>
+<li>‘info'</li>
+<li>‘msg'/‘message'</li>
+<li>‘warn'/‘warning'</li>
+</ul>
+
+<p>This parameter may be absent along with _domain_ to indicate ‘msg'.</p></li>
+<li>@msg@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The log message. Unlike g&#95;log(), no formatting is permitted. Collect and format your string before logging.</li>
+</ul>
+</dd>
+</dl>
+
+h2. <a name="Character_Set_Conversion"/>Character Set Conversion
+
+<dl>
+<dt> <a name="&#95;convert&#95;"/>&#95;convert&#95; ([str])*</dt>
+<dd><p>Stream character conversion function returned by "convert":#convert . This function is returned by "convert":#convert to support converting streams piecewise. Simply call with string arguments, accumulating the returned strings. When finished with the stream, call with no arguments. This will return the final string to append and reset the stream for reuse.</p>
+h3. Parameters:
+
+<ul>
+<li>@str@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the string to convert; absent to finish conversion</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). c = glib.convert(nil, 'utf-8', 'latin1')
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(c(buf))
+end
+outf:write(c())
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"convert":#convert
+</blockquote>
+</dd>
+<dt> <a name="convert"/>convert ([str[, to[, from[, fallback]]]])*</dt>
+<dd><p>Convert strings from one character set to another. This is a wrapper for @g_convert()@ and friends. To convert a stream, pass in no arguments or @nil@ for str. The return value is either the converted string, or a function matching the "&#95;convert&#95;":#_convert_ function.</p>
+h3. Parameters:
+
+<ul>
+<li>@str@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to convert, or @nil@/absent to produce a streaming converter</li>
+<li>@to@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The target character set. This may be @nil@ or absent to indicate the current locale. This may be ‘filename' to indicate the filename character set.</li>
+<li>@from@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The target character set. This may be @nil@ or absent to indicate the current locale. This may be ‘filename' to indicate the filename character set.</li>
+<li>@fallback@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Any characters in _from_ which have no equivalent in _to_ are converted to this string. This is not supported in stream mode.</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Converted string, if _str_ was specified</li>
+<li>*function* stream convert function, if _str_ was @nil@ or missing</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"&#95;convert&#95;":#_convert_
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Unicode_Manipulation"/>Unicode Manipulation
+
+<dl>
+<dt> <a name="validate"/>validate ( c )*</dt>
+<dd><p>Check if unicode character is valid. This is a wrapper for @g_unichar_validate()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is valid
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isalpha"/>isalpha ( c )*</dt>
+<dd><p>Check if Unicode character is alphabetic. This is a wrapper for @g_unichar_isalpha()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is alphabetic
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="iscntrl"/>iscntrl ( c )*</dt>
+<dd><p>Check if Unicode character is a control character. This is a wrapper for @g_unichar_iscntrl()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a control character
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isdefined"/>isdefined ( c )*</dt>
+<dd><p>Check if Unicode character is explicitly defined in the Unicode standard. This is a wrapper for @g_unichar_isdefined()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is defined
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isdigit"/>isdigit ( c )*</dt>
+<dd><p>Check if Unicode character is a decimal digit. This is a wrapper for @g_unichar_isdigit()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a digit-like character
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p>
+h3. see also:
+
+<ul>
+<li>"isxdigit":#isxdigit</li>
+<li>"digit&#95;value":#digit_value</li>
+</ul>
+</dd>
+<dt> <a name="isgraph"/>isgraph ( c )*</dt>
+<dd><p>Check if Unicode character is a visible, printable character. This is a wrapper for @g_unichar_isgraph()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a graphic character
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="islower"/>islower ( c )*</dt>
+<dd><p>Check if Unicode character is a lower-case alphabetic character. This is a wrapper for @g_unichar_islower()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is lower-case.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="ismark"/>ismark ( c )*</dt>
+<dd><p>Check if Unicode character is a mark. This is a wrapper for @g_unichar_ismark()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a non-spacing mark, combining mark, or enclosing mark
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isprint"/>isprint ( c )*</dt>
+<dd><p>Check if Unicode character is printable. This is a wrapper for @g_unichar_isprint()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is printable, even if blank
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="ispunct"/>ispunct ( c )*</dt>
+<dd><p>Check if Unicode character is a punctuation or symbol character. This is a wrapper for @g_unichar_ispunct()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a punctuation or symbol character
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isspace"/>isspace ( c )*</dt>
+<dd><p>Check if Unicode character is whitespace. This is a wrapper for @g_unichar_isspace()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is whitespace
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="istitle"/>istitle ( c )*</dt>
+<dd><p>Check if Unicode character is titlecase. This is a wrapper for @g_unichar_istitle()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is titlecase alphabetic
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isupper"/>isupper ( c )*</dt>
+<dd><p>Check if Unicode character is upper-case. This is a wrapper for @g_unichar_isupper()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is upper-case alphabetic
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="isxdigit"/>isxdigit ( c )*</dt>
+<dd><p>Check if Unicode character is hexadecimal digit. This is a wrapper for @g_unichar_isxdigit()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a hexadecimal digit
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p>
+h3. see also:
+
+<ul>
+<li>"isdigit":#isdigit</li>
+<li>"xdigit&#95;value":#xdigit_value</li>
+</ul>
+</dd>
+<dt> <a name="iswide"/>iswide ( c )*</dt>
+<dd><p>Check if Unicode character is wide. This is a wrapper for @g_unichar_iswide()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is double-width
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="iswide&#95;cjk"/>iswide&#95;cjk ( c )*</dt>
+<dd><p>Check if Unicode character is wide in legacy East Asian locales. This is a wrapper for @g_unichar_iswide_cjk()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is double-width normally or in legacy East-Asian locales
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="iszerowidth"/>iszerowidth ( c )*</dt>
+<dd><p>Check if Unicode character is zero-width. This is a wrapper for @g_unichar_iszerowidth()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _c_ is a zero-width combining character
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="toupper"/>toupper ( c )*</dt>
+<dd><p>Convert Unicode character to upper-case. This is a wrapper for @g_unichar_toupper()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="tolower"/>tolower ( c )*</dt>
+<dd><p>Convert Unicode character to lower-case. This is a wrapper for @g_unichar_tolower()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="totitle"/>totitle ( c )*</dt>
+<dd><p>Convert Unicode character to title case. This is a wrapper for @g_unichar_totitle()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The result of conversion, as either an integer or a utf-8 string, depending on what _c_ was.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="digit&#95;value"/>digit&#95;value ( c )*</dt>
+<dd><p>Convert digit to its numeric value. This is a wrapper for @g_unichar_digit_value()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The digit's numeric value
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8. Returns -1 if _c_ is not a digit.</p>
+h3. see also:
+
+<blockquote>
+
+"isdigit":#isdigit
+</blockquote>
+</dd>
+<dt> <a name="xdigit&#95;value"/>xdigit&#95;value ( c )*</dt>
+<dd><p>Convert hexadecimal digit to its numeric value. This is a wrapper for @g_unichar_xdigit_value()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The hex digit's numeric value
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8. Returns -1 if _c_ is not a hex digit.</p>
+h3. see also:
+
+<blockquote>
+
+"isxdigit":#isxdigit
+</blockquote>
+</dd>
+<dt> <a name="type"/>type ( c )*</dt>
+<dd><p>Find Unicode character class. This is a wrapper for @g_unichar_type()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The character's class; one of: @control@, @format@, @unassigned@, @private_use@, @surrogate@, @lowercase_letter@, @modifier_letter@, @other_letter@, @titlecase_letter@, @uppercase_letter@, @spacing_mark@, @enclosing_mark@, @non_spacing_mark@, @decimal_number@, @letter_number@, @other_number@, @connect_punctuation@, @dash_punctuation@, @close_punctuation@, @final_punctuation@, @initial_punctuation@, @other_punctuation@, @open_punctuation@, @currency_symbol@, @modifier_symbol@, @math_symbol@, @other_symbol@, @line_separator@, @paragraph_separator@, @space_separator@.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="break&#95;type"/>break&#95;type ( c )*</dt>
+<dd><p>Find Unicode character's line break classification. This is a wrapper for @g_unichar_break_type()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The line break classification; one of: @mandatory@, @carriage_return@, @line_feed@, @combining_mark@, @surrogate@, @zero_width_space@, @inseperable@, @non_breaking_glue@, @contingent@, @space@, @after@, @before@, @before_and_after@, @hyphen@, @non_starter@, @open_punctuation@, @close_punctuation@, @quotation@, @exclamation@, @ideographic@, @numeric@, @infix_separator@, @symbol@, @alphabetic@, @prefix@, @postfix@, @complex_context@, @ambiguous@, @unknown@, @next_line@, @word_joiner@, @hangul_l_jamo@, @hangul_v_jamo@, @hangul_t_jamo@, @hangul_lv_syllable@, @hangul_lvt_syllable@, @close_parenthesis@, @conditional_japanese_starter@, @hebrew_letter@.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="get&#95;mirror&#95;char"/>get&#95;mirror&#95;char ( c )*</dt>
+<dd><p>Find Unicode mirroring character. This is a wrapper for @g_unichar_get_mirror_char()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* @nil@ if the character has no mirror; otherwise, the mirror character. The returned character is either an integer or a utf-8 string, depending on the input.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="get&#95;script"/>get&#95;script ( c )*</dt>
+<dd><p>Find ISO 15924 script for a Unicode character. This is a wrapper for @g_unichar_get_script()@.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The four-letter ISO 15924 script code for _c_.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+<dt> <a name="utf8&#95;sub"/>utf8&#95;sub (s[, first[, last]])*</dt>
+<dd><p>Obtain a substring of a utf-8-encoded string. This is not a wrapper for @g_utf8_substring()@, but instead code which emulates "string.sub":http://www.lua.org/manual/5.1/manual.html#pdf-string.sub using @g_utf8_offset_to_pointer()@ and @g_utf8_strlen()@. Positive positions start at the beginining of the string, and negative positions start at the end. Position numbers refer to code points rather than byte offsets.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The utf-8-encoded source string</li>
+<li>@first@: *number* The first Unicode code point (default is 1)</li>
+<li>@last@: *number* The last Unicode code point (default is -1)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The requested substring. Out-of-bound ranges result in an empty string.
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;len"/>utf8&#95;len (s)*</dt>
+<dd><p>Obtain the number of code points in a utf-8-encoded string. This is a wrapper for @g_utf8_strlen()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The length of _s_, in code points.
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;validate"/>utf8&#95;validate (s)*</dt>
+<dd><p>Check if a string is valid UTF-8. This is a wrapper for @g_utf8_validate()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if _s_ is valid UTF-8.
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;strup"/>utf8&#95;strup (s)*</dt>
+<dd><p>Convert UTF-8 string to upper-case. This is a wrapper for @g_utf8_strup()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all lower-case characters converted to upper-case
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;strdown"/>utf8&#95;strdown (s)*</dt>
+<dd><p>Convert UTF-8 string to lower-case. This is a wrapper for @g_utf8_strdown()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, with all upper-case characters converted to lower-case
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;casefold"/>utf8&#95;casefold (s)*</dt>
+<dd><p>Convert UTF-8 string to case-independent form. This is a wrapper for @g_utf8_casefold()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, in a form that is suitable for case-insensitive direct string comparison.
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;normalize"/>utf8&#95;normalize (s[, compose[, compatible]])*</dt>
+<dd><p>Perform standard Unicode normalization on a UTF-8 string. This is a wrapper for @g_utf8_normalize()@. The four standard normalizations are NFD (the default), NFC (compose), NFKD (compatible), and NFKC (compose, compatible).</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to normalize</li>
+<li>@compose@: *boolean* If true, perform canonical composition. Otherwise, leave in decomposed form.</li>
+<li>@compatible@: *boolean* If true, decompose using compatibility decompostions. Otherwise, only decompose using canonical decompositions.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The normalized UTF-8 string.
+</blockquote>
+</dd>
+<dt> <a name="utf8&#95;collate"/>utf8&#95;collate (s1, s2)*</dt>
+<dd><p>Compare UTF-8 strings for collation. This is a wrapper for @g_utf8_collate()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s1@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The first string</li>
+<li>@s2@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The second string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* Numeric comparison result: less than zero if _s1_ comes before _s2_, greater than zero if _s1_ comes after _s2_, and zero if _s1_ and _s2_ are equivalent.
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"utf8&#95;collate&#95;key":#utf8_collate_key</li>
+<li>"utf8&#95;collate&#95;key&#95;for&#95;filename":#utf8_collate_key_for_filename</li>
+</ul>
+</dd>
+<dt> <a name="utf8&#95;collate&#95;key"/>utf8&#95;collate&#95;key (s)*</dt>
+<dd><p>Create a comparison key for a UTF-8 string. This is a wrapper for @g_utf8_collate_key()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison rather than utf8&#95;collate.
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"utf8&#95;collate":#utf8_collate</li>
+<li>"utf8&#95;collate&#95;key&#95;for&#95;filename":#utf8_collate_key_for_filename</li>
+</ul>
+</dd>
+<dt> <a name="utf8&#95;collate&#95;key&#95;for&#95;filename"/>utf8&#95;collate&#95;key&#95;for&#95;filename (s)*</dt>
+<dd><p>Create a comparison key for a UTF-8 filename string. This is a wrapper for @g_collate_key_for_filename()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 A form of the string which can be compared using direct string comparison. Dots and numeric sequences are treated differently. There is no equivalent @utf8_collate_filename()@.
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"utf8&#95;collate":#utf8_collate</li>
+<li>"utf8&#95;collate&#95;key":#utf8_collate_key</li>
+</ul>
+</dd>
+<dt> <a name="utf8&#95;to&#95;utf16"/>utf8&#95;to&#95;utf16 (s)*</dt>
+<dd><p>Convert a UTF-8 string to UTF-16. This is a wrapper for @g_utf8_to_utf16()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UTF-8.</p></dd>
+<dt> <a name="utf8&#95;to&#95;ucs4"/>utf8&#95;to&#95;ucs4 (s)*</dt>
+<dd><p>Convert a UTF-8 string to UCS-4. This is a wrapper for @g_utf8_to_ucs4()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UTF-8.</p></dd>
+<dt> <a name="utf16&#95;to&#95;utf8"/>utf16&#95;to&#95;utf8 (s)*</dt>
+<dd><p>Convert a UTF-16 string to UTF-8. This is a wrapper for @g_utf16_to_utf8()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UTF-16.</p></dd>
+<dt> <a name="utf16&#95;to&#95;ucs4"/>utf16&#95;to&#95;ucs4 (s)*</dt>
+<dd><p>Convert a UTF-16 string to UCS-4. This is a wrapper for @g_utf16_to_ucs4()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UCS-4
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UTF-16.</p></dd>
+<dt> <a name="ucs4&#95;to&#95;utf16"/>ucs4&#95;to&#95;utf16 (s)*</dt>
+<dd><p>Convert a UCS-4 string to UTF-16. This is a wrapper for @g_utf8_to_utf16()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-16
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UCS-4.</p></dd>
+<dt> <a name="ucs4&#95;to&#95;utf8"/>ucs4&#95;to&#95;utf8 (s)*</dt>
+<dd><p>Convert a UCS-4 string to UTF-8. This is a wrapper for @g_utf16_to_utf8()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The source string</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_, converted to UTF-8
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if _s_ is not valid UCS-4.</p></dd>
+<dt> <a name="to&#95;utf8"/>to&#95;utf8 ( c )*</dt>
+<dd><p>Convert a UCS-4 code point to UTF-8. This is a wrapper for @g_unichar_to_utf8()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The Unicode character, as either an integer or a utf-8 string.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 A UTF-8 string representing _c_. Note that this basically has no effect if _c_ is a single-character string already.
+</blockquote>
+
+h3. Raises:
+
+<p>Generates argument error if _c_ is a string but not valid UTF-8.</p></dd>
+</dl>
+
+h2. <a name="Base64_Encoding"/>Base64 Encoding
+
+<dl>
+<dt> <a name="&#95;base64&#95;encode&#95;"/>&#95;base64&#95;encode&#95; ([s])*</dt>
+<dd><p>Stream Base64-encoding function returned by "base64&#95;encode":#base64_encode . This function is returned by "base64&#95;encode":#base64_encode to support piecewise-encoding streams. Simply call with string arguments, accumulating the returned strings. When finished with the stream, call with no arguments. This will return the final string to append and reset the stream for reuse.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the string to convert; absent to finish conversion</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). enc = glib.base64_encode()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(enc(buf))
+end
+outf:write(enc())
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted string
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"base64&#95;encode":#base64_encode
+</blockquote>
+</dd>
+<dt> <a name="base64&#95;encode"/>base64&#95;encode ([s])*</dt>
+<dd><p>Base64-encode a string. This is a wrapper for @g_base64_encode()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to encode. If absent, return a function like "&#95;base64&#95;encode&#95;":#_base64_encode_ for encoding a stream.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The base64-encoded stream (without newlines), or a function to do the same on a stream.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;base64&#95;encode&#95;":#_base64_encode_
+</blockquote>
+</dd>
+<dt> <a name="&#95;base64&#95;decode&#95;"/>&#95;base64&#95;decode&#95; ([s])*</dt>
+<dd><p>Stream Base64-decoding function returned by "base64&#95;decode":#base64_decode . This function is returned by "base64&#95;decode":#base64_decode to support piecewise-decoding streams. Simply call with string arguments, accumulating the returned strings. When finished with the stream, call with no arguments. This will return the final string to append and reset the stream for reuse.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the string to convert; absent to finish conversion</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). dec = glib.base64_decode()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  outf:write(dec(buf))
+end
+outf:write(dec())
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the converted output
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"base64&#95;decode":#base64_decode
+</blockquote>
+</dd>
+<dt> <a name="base64&#95;decode"/>base64&#95;decode ([s])*</dt>
+<dd><p>Base64-decode a string. This is a wrapper for @g_base64_deocde()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to decode. If absent, return a function like _base64&#95;decode_ for decoding a stream.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The decoded form of the base64-encoded stream, or a function to do the same on a stream.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;base64&#95;decode&#95;":#_base64_decode_
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Data_Checksums"/>Data Checksums
+
+<dl>
+<dt> <a name="&#95;sum&#95;"/>&#95;sum&#95; ([s][, raw])*</dt>
+<dd><p>Stream checksum/hash calculation function type. This function is returned by "md5sum":#md5sum , "sha1sum":#sha1sum , or "sha256sum":#sha256sum to support computing stream checksums piecewise. Simply call with string arguments, until the stream is complete. Then, call with an absent or @nil@ argument to return the final checksum. Doing so invalidates the state, so that the function returns an error from that point forward.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the string to checksum; absent or @nil@ to finish checksum</li>
+<li>@raw@: *boolean* True if checksum should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is not @nil@)</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). sumf = glib.md5sum()
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  sumf(buf)
+end
+sum = sumf()
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed checksum.
+</blockquote>
+
+h3. Raises:
+
+<p>If the state is invalid, always return @nil@.</p>
+h3. see also:
+
+<ul>
+<li>"md5sum":#md5sum</li>
+<li>"sha1sum":#sha1sum</li>
+<li>"sha256sum":#sha256sum</li>
+</ul>
+</dd>
+<dt> <a name="md5sum"/>md5sum ([s[, raw]])*</dt>
+<dd><p>Compute MD5 checksum of a string. This is a wrapper for @g_checksum_new()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to checksum. If absent, return a function like "&#95;sum&#95;":#_sum_ to checksum a stream piecewise.</li>
+<li>@raw@: *boolean* True if checksum should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 checksum or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;sum&#95;":#_sum_
+</blockquote>
+</dd>
+<dt> <a name="sha1sum"/>sha1sum ([s[, raw]])*</dt>
+<dd><p>Compute SHA1 checksum of a string. This is a wrapper for @g_checksum_new()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to checksum. If absent, return a function like "&#95;sum&#95;":#_sum_ to checksum a stream piecewise.</li>
+<li>@raw@: *boolean* True if checksum should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 checksum or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;sum&#95;":#_sum_
+</blockquote>
+</dd>
+<dt> <a name="sha256sum"/>sha256sum ([s[, raw]])*</dt>
+<dd><p>Compute SHA256 checksum of a string. This is a wrapper for @g_checksum_new()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to checksum. If absent, return a function like "&#95;sum&#95;":#_sum_ to checksum a stream piecewise.</li>
+<li>@raw@: *boolean* True if checksum should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 checksum or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;sum&#95;":#_sum_
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Secure_HMAC_Digests"/>Secure HMAC Digests
+
+<dl>
+<dt> <a name="&#95;hmac&#95;"/>&#95;hmac&#95; ([s][, raw])*</dt>
+<dd><p>Stream HMAC calculation function. This function is returned by "md5hmac":#md5hmac , "sha1hmac":#sha1hmac , or "sha256hmac":#sha256hmac to support computing stream digests piecewise. Simply call with string arguments, until the stream is complete. Then, call with an absent or @nil@ argument to return the final digest. Doing so invalidates the state, so that the function returns an error from that point forward.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next piece of the string to digest; absent or @nil@ to finish digest</li>
+<li>@raw@: *boolean* True if digest should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is not @nil@)</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). hmacf = glib.md5hmac(key)
+while true do
+  buf = inf:read(4096)
+  if not buf then break end
+  hmacf(buf)
+end
+hmac = hmacf()
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+&#124;*nil* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 Nothing unless _s_ is absent or @nil@. Otherwise, return the computed digest.
+</blockquote>
+
+h3. Raises:
+
+<p>If the state is invalid, always return @nil@.</p>
+h3. see also:
+
+<ul>
+<li>"md5hmac":#md5hmac</li>
+<li>"sha1hmac":#sha1hmac</li>
+<li>"sha256hmac":#sha256hmac</li>
+</ul>
+</dd>
+<dt> <a name="md5hmac"/>md5hmac (key[, s[, raw]])*</dt>
+<dd><p>Compute secure HMAC digest using MD5. This is a wrapper for @g_hmac_new()@ and friends.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 HMAC key</li>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to digest. If absent, return a function like "&#95;hmac&#95;":#_hmac_ to digest a stream piecewise.</li>
+<li>@raw@: *boolean* True if digest should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The MD5 HMAC digest or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;hmac&#95;":#_hmac_
+</blockquote>
+</dd>
+<dt> <a name="sha1hmac"/>sha1hmac (key[, s[, raw]])*</dt>
+<dd><p>Compute secure HMAC digest using SHA1. This is a wrapper for @g_hmac_new()@ and friends.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 HMAC key</li>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to digest. If absent, return a function like "&#95;hmac&#95;":#_hmac_ to digest a stream piecewise.</li>
+<li>@raw@: *boolean* True if digest should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA1 HMAC digest or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;hmac&#95;":#_hmac_
+</blockquote>
+</dd>
+<dt> <a name="sha256hmac"/>sha256hmac (key[, s[, raw]])*</dt>
+<dd><p>Compute secure HMAC digest using SHA256. This is a wrapper for @g_hmac_new()@ and friends.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 HMAC key</li>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data to digest. If absent, return a function like "&#95;hmac&#95;":#_hmac_ to digest a stream piecewise.</li>
+<li>@raw@: *boolean* True if digest should be returned in binary form. Otherwise, return the lower-case hexadecimal-encoded form (ignored if _s_ is @nil@)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*function* The SHA256 HMAC digest or a stream converter function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"&#95;hmac&#95;":#_hmac_
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Internationalization"/>Internationalization
+
+<dl>
+<dt> <a name="&#95;"/>&#95; (s)*</dt>
+<dd><p>Replace text with its translation. This is a wrapper for @_()@. It resides in the global symbol table rather than in "glib":# .</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text to translate</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation
+</blockquote>
+</dd>
+<dt> <a name="Q&#95;"/>Q&#95; (s)*</dt>
+<dd><p>Replace text and context with its translation. This is a wrapper for @Q_()@. It resides in the global symbol table rather than in "glib":# .</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 the optional context, followed by a vertical bar, followed by the text to translate</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ with its context stripped if there is no translation
+</blockquote>
+</dd>
+<dt> <a name="C&#95;"/>C&#95; (c, s)*</dt>
+<dd><p>Replace text and context with its translation. This is a wrapper for @C_()@. It resides in the global symbol table rather than in "glib":# .</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The context</li>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text to translate</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The translated text, or _s_ if there is no translation
+</blockquote>
+</dd>
+<dt> <a name="N&#95;"/>N&#95; (s)*</dt>
+<dd><p>Mark text for translation. This is a wrapper for @N_()@. It resides in the global symbol table rather than in "glib":# .</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text to translate</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_
+</blockquote>
+</dd>
+<dt> <a name="NC&#95;"/>NC&#95; (c, s)*</dt>
+<dd><p>Mark text for translation with context. This is a wrapper for @NC_()@. It resides in the global symbol table rather than in "glib":# .</p>
+h3. Parameters:
+
+<ul>
+<li>@c@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The context</li>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text to translate.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 _s_
+</blockquote>
+</dd>
+<dt> <a name="get&#95;locale&#95;variants"/>get&#95;locale&#95;variants ([locale])*</dt>
+<dd><p>Obtain list of valid locale names. This is a wrapper for @g_get_locale_variants()@ and @g_get_language_names()@.</p>
+<p>This is only available with GLib 2.28 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@locale@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 If present, find valid locale names derived from this. Otherwise, find valid names for the default locale (including C).</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table array containing valid names for the locale, in order of preference.
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Date_and_Time_Functions"/>Date and Time Functions
+
+<dl>
+<dt> <a name="sleep"/>sleep (t)*</dt>
+<dd><p>Suspend execution for some seconds. This is a wrapper for @g_usleep()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@t@: *number* Number of seconds to sleep (microsecond accuracy)</li>
+</ul>
+</dd>
+<dt> <a name="usleep"/>usleep (t)*</dt>
+<dd><p>Suspend execution for some microseconds. This is a wrapper for @g_usleep()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@t@: *number* Number of microseconds to sleep</li>
+</ul>
+</dd>
+</dl>
+
+h2. <a name="Random_Numbers"/>Random Numbers
+
+Note that no high-level wrapper functions are provided similar to those in cmorris' glib wrapper. Instead, pure Lua functions should be used:
+
+<pre>
+function shuffle(a)
+    local i
+    for i = 1, #a do
+        local r = glib.random(#a)
+        local t = a[i]
+        a[i] = a[r]
+        a[r] = t
+    end
+end
+
+function choice(a)
+    if #a == 0 then
+        return nil
+    end
+    return a[glib.random(#a)];
+end
+
+function sample(a, n)
+    local b = {}
+    local s = {}
+    local i
+    for i = 1, n do
+        -- warning, this could take a while if n is near #a
+        repeat
+            r = glib.random(#a)
+            -- to force this to run in predictable time, do this:
+            -- while not b[r] do r = r % #a + 1 end
+        until not b[r]
+        b[r] = true
+        s[i] = a[r]
+    end
+    return s
+end
+
+</pre>
+
+<dl>
+<dt> <a name="random"/>random ([low[, high]])*</dt>
+<dd><p>Obtain a psuedorandom number. This is a wrapper for @g_random()@ and friends. This is a clone of the standard Lua "math.random":http://www.lua.org/manual/5.1/manual.html#pdf-math.random , but using a different random number algorithm. Note that there is no way to set the seed; use "rand&#95;new":#rand_new if you need to do that. In fact, you can simply replace "random":#random with the results of "rand&#95;new":#rand_new if you want to simulate setting a seed for this function.</p>
+h3. Parameters:
+
+<ul>
+<li>@low@: *number* If _high_ is present, this is the low end of the range of random integers to return</li>
+<li>@high@: *number* If present, return a range of random integers, from _low_ to _high_ inclusive. If not present, return a floating point number in the range from zero to one exclusive of one. If _low_ is not present, and _high_ is, _low_ is 1.</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). -- set a seed for glib.random
+glib.random = glib.rand_new(seed)
+
+
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"rand&#95;new":#rand_new</li>
+<li>"math.random":http://www.lua.org/manual/5.1/manual.html#pdf-math.random</li>
+</ul>
+</dd>
+<dt> <a name="rand&#95;new"/>rand&#95;new ([seed])*</dt>
+<dd><p>Obtain a psuedorandom number generator, given a seed. This is a wrapper for @g_rand_new()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@seed@: *number* &#124;{*number* ,...} seed (if not specified, one will be selected by the library). This may be either a number or a table array of numbers.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*function* A function with the same behavior as "random":#random .
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"random":#random
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Miscellaneous_Utility_Functions"/>Miscellaneous Utility Functions
+
+<dl>
+<dt> <a name="application&#95;name"/>application&#95;name ([name])*</dt>
+<dd><p>Set or get localized application name. This is a wrapper for @g_get_application_name()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 If present, set the application name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the application, as set by a previous invocation of this function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"prgname":#prgname
+</blockquote>
+</dd>
+<dt> <a name="prgname"/>prgname ([name])*</dt>
+<dd><p>Set or get program name. This is a wrapper for @g_get_prgname()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 If present, set the program name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the program, as set by a previous invocation of this function.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"application&#95;name":#application_name
+</blockquote>
+</dd>
+<dt> <a name="getenv"/>getenv (name)*</dt>
+<dd><p>Get environment variable value. This is a wrapper for @g_getenv()@. It is safer to use this than "os.getenv":http://www.lua.org/manual/5.1/manual.html#pdf-os.getenv if you are going to modify the environment.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of environment variable to retrieve</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 Value of variable (string) if present; otherwise nil
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"setenv":#setenv</li>
+<li>"unsetenv":#unsetenv</li>
+</ul>
+</dd>
+<dt> <a name="setenv"/>setenv (name, value[, replace])*</dt>
+<dd><p>Set environment variable value. This is a wrapper for @g_setenv()@. If you use this, you should use "glib.getenv":#getenv instead of "os.getenv":http://www.lua.org/manual/5.1/manual.html#pdf-os.getenv as well.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of variable to set</li>
+<li>@value@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 New value of variable</li>
+<li>@replace@: *boolean* True to replace if exists; otherwise leave old value</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if set succeeded; false otherwise
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"getenv":#getenv</li>
+<li>"unsetenv":#unsetenv</li>
+</ul>
+</dd>
+<dt> <a name="unsetenv"/>unsetenv (name)*</dt>
+<dd><p>Remove environment variable. This is a wrapper for @g_unsetenv()@. If you use this, you should use "glib.getenv":#getenv instead of "os.getenv":http://www.lua.org/manual/5.1/manual.html#pdf-os.getenv as well.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of variable to remove from environment</li>
+</ul>
+
+h3. see also:
+
+<ul>
+<li>"getenv":#getenv</li>
+<li>"setenv":#setenv</li>
+</ul>
+</dd>
+<dt> <a name="listenv"/>listenv ()*</dt>
+<dd><p>Obtain names of all environment variables. This is a wrapper for @g_listenv()@.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}An array table whose entries are environment variable names
+</blockquote>
+</dd>
+<dt> <a name="get&#95;user&#95;name"/>get&#95;user&#95;name ()*</dt>
+<dd><p>Obtain system user name for current user. This is a wrapper for @g_get_user_name()@.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the user
+</blockquote>
+</dd>
+<dt> <a name="get&#95;real&#95;name"/>get&#95;real&#95;name ()*</dt>
+<dd><p>Obtain full user name for current user. This is a wrapper for @g_get_real_name()@.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The full name of the user, or Unknown if this cannot be obtained.
+</blockquote>
+</dd>
+<dt> <a name="get&#95;dir&#95;name"/>get&#95;dir&#95;name (d)*</dt>
+<dd><p>Obtain a standard directory name. This is a wrapper for @g_get_*_dir()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The directory to obtain; one of @cache@, @config@, @data@, @desktop@, @documents@, @download@, @home@, @music@, @pictures@, @runtime@, @share@, @system_config@, @system_data@, @templates@, @tmp@, @videos@, @list@. @list@ just returns this list of names.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The directory (a string) if there can be only one; if there can be more than one, the list of directories is returned as a table array of strings. Currently, only @list@, @system_data@, and @system_config@ return more than one.
+</blockquote>
+
+h3. Raises:
+
+<p>If there is no standard directory of the given kind, returns @nil@.</p></dd>
+<dt> <a name="get&#95;host&#95;name"/>get&#95;host&#95;name ()*</dt>
+<dd><p>Obtain current host name. This is a wrapper for @g_get_host_name()@.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The local host name. This is not guaranteed to be a unique identifier for the host, or in any way related to its DNS entry.
+</blockquote>
+</dd>
+<dt> <a name="get&#95;current&#95;dir"/>get&#95;current&#95;dir ()*</dt>
+<dd><p>Obtain current working directory. This is a wrapper for @g_get_current_dir()@.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The current working directory, as an absolute path.
+</blockquote>
+</dd>
+<dt> <a name="path&#95;is&#95;absolute"/>path&#95;is&#95;absolute (d)*</dt>
+<dd><p>Check if a directory is absolute. This is a wrapper for @g_path_is_absolute()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The directory to check</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if d is absolute; false otherwise.
+</blockquote>
+</dd>
+<dt> <a name="path&#95;split&#95;root"/>path&#95;split&#95;root (d)*</dt>
+<dd><p>Split the root part from a path. This is a wrapper for @g_path_skip_root()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path to split</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*nil* The root part. If the path is not absolute, this will be @nil@.</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The non-root part</li>
+</ol>
+</dd>
+<dt> <a name="path&#95;get&#95;basename"/>path&#95;get&#95;basename (d)*</dt>
+<dd><p>Obtain the last element of a path. This is a wrapper for @g_path_get_basename()@. Note that if the last element of a path is blank, this may return the second-to-last element. Also, if this is simply a directory separator, the directory separator is returned. In other words, it is not possible to reconstruct the original file name by appending results from this function.</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path to split</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The last path element of the path
+</blockquote>
+</dd>
+<dt> <a name="path&#95;get&#95;dirname"/>path&#95;get&#95;dirname (d)*</dt>
+<dd><p>Obtain all but the last element of a path. This is a wrapper for @g_path_dirname()@. Note that if there is no parent element, and the path is relative, . may be returned. If the path is absolute, the absolute prefix may be returned even if it is the only element present. If there is a terminating directory separator, this may return the same path element as "path&#95;get&#95;basename":#path_get_basename .</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path to split</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 All but the last element of the path.
+</blockquote>
+</dd>
+<dt> <a name="build&#95;filename"/>build&#95;filename (...)*</dt>
+<dd><p>Construct a file name from its path constituents. This is a wrapper for @g_build_filenamev()@. There is no inverse operation, but it can be implemented in Lua:</p>
+bc. -- assumes multiple consecutive directory separators are the same as
+-- just one separator (true on non-root in Windows and everywhere in UNIX)
+-- but as a counterexample, AmigaOS has no . and .., but instead uses
+-- blank to mean both:
+--    "" == UNIX .  "/x" == ../x "x///y" == UNIX x/../../y
+function split_filename(f)
+    local res = {}
+    local r
+    r, f = glib.path_split_root(f)
+    -- note: it may be a good idea to trim r as well:
+    --  convert ^[dir_sep]+$ to dir_sep[0] (strip duplicate dir_sep)
+    --  convert ^([^dir_sep].*?)[dir_sep]*$ to \1 (stip trailing dir_sep)
+    local rx = glib.regex_new('[' .. glib.regex_escape_string(glib.dir_separator) .. ']')
+    local i, e, laste
+    for i, e in ipairs(rx:split(f)) do
+        if e ~= '' then table.insert(res, e) end
+        laste = e
+    end
+    if laste == '' then table.insert(res, '') end
+end
+
+
+
+h3. Parameters:
+
+<ul>
+<li>@...@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}&#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,... If the first parameter is a table, this table contains a list of path element strings. Otherwise, all parameters are taken to be the path element strings.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one directory separator as appropriate.
+</blockquote>
+</dd>
+<dt> <a name="build&#95;path"/>build&#95;path (sep, ...)*</dt>
+<dd><p>Construct a path from its constituents. This is a wrapper for @g_build_pathv()@. Note that blank elements are simply ignored. If blank elements are required, use Lua instead:</p>
+bc. function build_path(sep, ...)
+    local i, v
+    local ret = ''
+     for i, v in ipairs{...} do
+       if i > 1 then ret = ret .. sep end
+       ret = ret .. v
+     end
+end
+
+
+
+<p>Also, there is no inverse function. This can be emulated using "regex:split":#regex:split :</p>
+bc. function split_path(p, sep)
+   local rx = glib.regex_new(glib.regex_escape_string(sep))
+   return rx:split(p)
+end
+
+
+
+h3. Parameters:
+
+<ul>
+<li>@sep@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path element separator</li>
+<li>@...@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}&#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,... If the first parameter is a table, this table contains a list of path element strings. Otherwise, all parameters are taken to be the path element strings.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The result of concatenating all supplied path elements, separated by at most one path separator.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"build&#95;filename":#build_filename
+</blockquote>
+</dd>
+<dt> <a name="path&#95;canonicalize"/>path&#95;canonicalize (f)*</dt>
+<dd><p>Canonicalize a path name. This does not wrap anything in GLib, as GLib does not provide such a function. This function converts a path name to an absolute path name with all relative path references (i.e., . and ..) removed and symbolic links resolved. Additional steps are taken on Windows in an attempt to resolve the myriad of ways a path name may be specified, including short-to-long name conversion, case normalization (for path elements which exist), and UNC format consolidation. Note that there are several unresolvable issues: On Windows, there may be host names in the path, which are hard to resolve even with DNS. Also, both Windows and UNIX might have a the same path mounted in two different places, and sometimes it's hard to tell that they are the same (and no extra effort is put into checking, either).</p>
+h3. Parameters:
+
+<ul>
+<li>@f@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The file name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The canonicalized file name. Note that on Windows, the canonical name always uses backslashes for directory separators.
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ followed by an error message if there is a problem</p></dd>
+<dt> <a name="qsort"/>qsort (t[, cmp])*</dt>
+<dd><p>Sort a table using a stable quicksort algorithm. This is a wrapper for @g_qsort_with_data()@. This sorts a table in-place the same way as "table.sort":http://www.lua.org/manual/5.1/manual.html#pdf-table.sort does, but it performs an extra comparison if necessary to determine of two elements are equal (i.e., _cmp_(a, b) == _cmp_(b, a) == false). If so, they are sorted in the order they appeared in the original table. The extra comparison can be avoided by returning a number instead of a boolean from the comparison function; in this case, the number's relationship with 0 indicates a's relationship with b.</p>
+h3. Parameters:
+
+<ul>
+<li>@t@: "table":http://www.lua.org/manual/5.1/manual.html#5.5 Table to sort</li>
+<li>@cmp@: *function* Function to use for comparison; takes two table elements and returns true if the first is less than the second. If not specified, Lua's standard less-than operator is used. The function may also return an integer instead of a boolean, in which case the number must be 0, less than 0, or greater than 0, indicating a is equal to, less than, or greater than b, respectively.</li>
+</ul>
+
+h3. see also:
+
+<ul>
+<li>"utf8&#95;collate":#utf8_collate</li>
+<li>"cmp":#cmp</li>
+</ul>
+</dd>
+<dt> <a name="cmp"/>cmp (a, b)*</dt>
+<dd><p>Compare two objects. This function returns the difference between two objects. If the _sub_ operation is available in the first object's metatable, that is called. Otherwise, if both parameters are numbers, they are subtracted. Otherwise, if they are both strings, they are byte-wise compared and their relative order is returned. Finally, as a last resort, the standard less-than operator is used, possibly twice, to indicate relative order.</p>
+h3. Parameters:
+
+<ul>
+<li>@a@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The first object</li>
+<li>@b@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The second object</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*integer* Greater than zero if _a_ is greater than _b_; less than zero if _a_ is less than _b_; zero if _a_ is equal to _b_.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"utf8&#95;collate":#utf8_collate
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Timers"/>Timers
+
+<dl>
+<dt> <a name="timer&#95;new"/>timer&#95;new ()*</dt>
+<dd><p>Create a stopwatch-like timer. This is a wrapper for @g_timer_new()@.</p>
+h3. Returns:
+
+<blockquote>
+
+"timer":#Class_timer A timer object
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Class_timer"/>Class timer
+
+<dl>
+<dt> <a name="timer:start"/>timer:start ()*</dt>
+<dd>Start or reset the timer. This is a wrapper for @g_timer_start()@.</dd>
+<dt> <a name="timer:stop"/>timer:stop ()*</dt>
+<dd>Stop the timer if it is running. This is a wrapper for @g_timer_stop()@.</dd>
+<dt> <a name="timer:continue"/>timer:continue ()*</dt>
+<dd>Resume the timer if it is stopped. This is a wrapper for @g_timer_continue()@.</dd>
+<dt> <a name="timer:elapsed"/>timer:elapsed ()*</dt>
+<dd><p>Return the amount of time counted so far. This is a wrapper for @g_timer_elapsed()@.</p>
+h3. Returns:
+
+<blockquote>
+
+*number* The time counted so far, in seconds.
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Spawning_Processes"/>Spawning Processes
+
+<dl>
+<dt> <a name="spawn"/>spawn (args)*</dt>
+<dd><p>Run a command asynchronously. This is a wrapper for @g_spawn_async_with_pipes()@. The other spawn functions can easily be emulated using this.</p>
+h3. Parameters:
+
+<ul>
+<li><p>@args@: "table":http://www.lua.org/manual/5.1/manual.html#5.5 &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4</p>
+<p>If the parameter is a string, parse the string as a shell command and execute it. Otherwise, the command is taken from the table. If the table has no array component, the command must be specified using the _cmd_ field. Otherwise, the array elements specify the argument vector of the command. If both are provided, the command to actually execute is _cmd_, but the first array element is still passed in as the proposed process name. In addition to the command arguments and _cmd_ field, the following fields specify options for the spawned command:</p>
+<dl>
+<dt>*stdin*: file&#124;string&#124;boolean (default = false)</dt>
+<dd>Specify the standard input to the process. If this is a file descriptor, it must be opened in read mode; its contents will be the process' standard input. If this is a string, it names a file to be opened for reading. The file name may be blank to indicate that the standard input should be inherited from the current process. The file name may be prefixed with an exclamation point to open in binary mode; otherwise it is opened in normal (text) mode. Any other value is evaluated as a boolean; true means that a pipe should be opened such that proc:write() writes to the process, and false means that no standard input should be provided at all (equivalent to UNIX /dev/null).</dd>
+<dt>*stdout*: file&#124;string&#124;boolean (default = true)</dt>
+<dd>Specify the standard output for the process. If this is a file descriptor, it must be opened in write mode; the process' standard output will be written to that file. If this is a string, it names a file to be opened for appending. The file name may be blank to indicate that the standard output should be inherited from the current process. The file name may be prefixed with an exclamation point to open in binary mode; otherwise it is opened in normal (text) mode. Any other value is evaluated as a boolean; true means that a pipe should be opened such that proc:read() reads from the process, and false means that standard output should be ignored.</dd>
+<dt>*stderr*: file&#124;string&#124;boolean (default = “”)</dt>
+<dd>Specify the standard error for the process. See the *stdout* description for details; the only difference is in which functions are used to read from the pipe (read&#95;err and friends).</dd>
+<dt>*env*: table</dt>
+<dd>Specify the environment for the process. If this is not provided, the environment is inherited from the parent. Otherwise, all keys in the table correspond to variables, and the values correspond to those variables' values. Only these variables will be set in the spawned process.</dd>
+<dt>*path*: boolean (default = true)</dt>
+<dd>If this is present and false, do not use the standard system search path to find the command to execute.</dd>
+<dt>*chdir*: string</dt>
+<dd>If this is present, change to the given directory when executing the commmand. Otherwise, it will execute in the current working directory.</dd>
+<dt>*cmd*: string</dt>
+<dd>If this is present, and there are no array entries in this table, it is parsed as a shell command to construct the command to run. Otherwise, it is the command to execute instead of the first element of the argument array.</dd>
+</dl>
+</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+<pre class="example">
+-- fully quoted arguments
+p = glib.spawn {'cat', f}
+f_cont = p:wait()
+
+-- generic command line; parsed by glib rather than shell so relatively safe
+p = glib.spawn(cmd='cat /tmp/xyz')
+xyz_cont = p:wait()
+
+-- fully quoted arguments, but with renamed argv[0] if supported
+p = glib.spawn('concatenate', f, cmd='/bin/cat')
+f_cont = p:wait()
+
+-- write output to a file
+-- more portable than tacking &gt;file to the command
+of = open('/tmp/of', 'w')
+p = glib.spawn('cat', f, stdout=of)
+p:wait()
+of:close()
+</pre>
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+"process":#Class_process An object representing the process.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"shell&#95;parse&#95;argv":#shell_parse_argv
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Class_process"/>Class process
+
+<dl>
+<dt> <a name="process:read&#95;ready"/>process:read&#95;ready (...)*</dt>
+<dd><p>Wait for input to be available from process standard output. This function is to support non-blocking input from the process. It takes the same parameters as read, and returns true if that read would succeed without blocking. It accomplishes this by attempting the requested read in a background thread, and returning success when the data has actually been read. Due to buffer sizes used and other issues, the reader thread might hang waiting for input even when enough data is available, depending on operating system. On Linux, at least, it should never hang.</p>
+h3. Parameters:
+
+<ul>
+<li>@...@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* See "process:read":#process:read for details. For the ‘&#42;n' format, since it is difficult to tell how much input will be required, the thread will read until it finds a non-blank word.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if reading using the given format(s) will succeed without blocking.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read":#process:read
+</blockquote>
+</dd>
+<dt> <a name="process:read&#95;err&#95;ready"/>process:read&#95;err&#95;ready (...)*</dt>
+<dd><p>Wait for input to be available from process standard error. See the documentation for "process:read&#95;ready":#process:read_ready for details.</p>
+h3. Parameters:
+
+<ul>
+<li>@...@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* See "process:read&#95;ready":#process:read_ready for details.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if reading using the given format(s) will succeed without blocking.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read&#95;ready":#process:read_ready
+</blockquote>
+</dd>
+<dt> <a name="process:read"/>process:read (...)*</dt>
+<dd><p>Read data from a process' standard output. This function is a clone of the standard Lua @file:read@ function. It defers actual I/O to the "process:read&#95;ready":#process:read_ready routine, which in turn lets a background thread do all of the reading. It will block until process:read&#95;ready` is true, and then read directly from the buffer read by the thread.</p>
+h3. Parameters:
+
+<ul>
+<li><p>@...@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number*</p>
+<p>If no parameters are given, read a single newline-terminated line from input, and strip the trailing newline. Otherwsie, for each parameter, until failure, a result is read and returned based on the parameter. If the parameter is a number, then that many bytes (or fewer) are read. Otherwise, the parameter must be a string containing one of the following:</p>
+<ul>
+<li>‘&#42;l'  -  read a line in the same way as the empty argument list does.</li>
+<li>‘&#42;n'  -  read a number from input; in this case, a number is returned instead of a string.</li>
+<li>‘&#42;a'  -  read the entire remainder of the input. Note that if this is given as a format to "process:read&#95;ready":#process:read_ready , all standard output from the process will be read as soon as it is available.</li>
+</ul>
+</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* For each parameter (or for the line read by the empty parameter list), the results of reading that format are returned. If an error occurred for any parameter, @nil@ is returned for that parameter and no further parameters are processed.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read&#95;ready":#process:read_ready
+</blockquote>
+</dd>
+<dt> <a name="process:read&#95;err"/>process:read&#95;err (...)*</dt>
+<dd><p>Read data from a process' standard error. See the "process:read":#process:read function documentation for details.</p>
+h3. Parameters:
+
+<ul>
+<li>@...@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* See the read function documentation for details.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* &#124;*nil...* See the read function documentation for details.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read":#process:read
+</blockquote>
+</dd>
+<dt> <a name="process:lines"/>process:lines ()*</dt>
+<dd><p>Return an iterator which reads lines from the process' standard output. On each iteration, this returns the result of "process:read":#process:read ().</p>
+h3. Returns:
+
+<blockquote>
+
+*function* The iterator.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read":#process:read
+</blockquote>
+</dd>
+<dt> <a name="process:lines&#95;err"/>process:lines&#95;err ()*</dt>
+<dd><p>Return an iterator which reads lines from the process' standard error. On each iteration, this returns the result of "process:read&#95;err":#process:read_err ().</p>
+h3. Returns:
+
+<blockquote>
+
+*function* The iterator.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:read&#95;err":#process:read_err
+</blockquote>
+</dd>
+<dt> <a name="process:write&#95;ready"/>process:write&#95;ready ()*</dt>
+<dd><p>Check if writing to the process' standard input will block. Writing to a process' standard input is made non-blocking by running writes in a background thread.</p>
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if a call to process:write() will not block.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:write":#process:write
+</blockquote>
+</dd>
+<dt> <a name="process:write"/>process:write (...)*</dt>
+<dd><p>Write to a process' standard input. Writes all arguments to the process' standard input. It does this using a background writer thread that writes each argument before allowing the next write. In other words, the first write will not block, but subsequent writes will bock until the previous write has completed.</p>
+h3. Parameters:
+
+<ul>
+<li>@...@: *string...* All strings are written, in the order given.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* Returns true on success. However, since the write has not truly completed until the background writer has finished, the only way to ensure that writing was complete and successful is to use "process:write&#95;ready":#process:write_ready or "process:io&#95;wait":#process:io_wait .
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"process:write&#95;ready":#process:write_ready
+</blockquote>
+</dd>
+<dt> <a name="process:close"/>process:close ()*</dt>
+<dd>Close the process' standard input channel. This function flushes any pending writes and closes the input channel. Many processes which take input from standard input need this to detect the end of input in order to continue processing.</dd>
+<dt> <a name="process:io&#95;wait"/>process:io&#95;wait ([check&#95;in[, check&#95;out[, check&#95;err]]])*</dt>
+<dd><p>Check for process activity. Check to see if I/O is in progress or the process has died.</p>
+h3. Parameters:
+
+<ul>
+<li>@check_in@: *boolean* Return a flag indicating if the background standard input writer is idle.</li>
+<li>@check_out@: *boolean* Return a flag indicating if the background standard output reader is idle.</li>
+<li>@check_err@: *boolean* Return a flag indicating if the background standard error reader is idle.</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* True if the standard input thread is idle; only returned if requested</li>
+<li>*boolean* True if the standard output thread is idle; only returned if requested</li>
+<li>*boolean* True if the standard error thread is idle; only returned if requested</li>
+<li>*boolean* True if the process is no longer running.</li>
+</ol>
+</dd>
+<dt> <a name="process:pid"/>process:pid ()*</dt>
+<dd><p>Return the glib process ID for the process. Using the process ID for anything other than printing debug messages is non-portable.</p>
+h3. Returns:
+
+<blockquote>
+
+*number* GLib process ID (which may or may not correspond to a system process ID)
+</blockquote>
+</dd>
+<dt> <a name="process:status"/>process:status ()*</dt>
+<dd><p>Return the status of the running process.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* If the process is running, the string @running@ is returned. Otherwise, the numeric exit code from the process is returned.
+</blockquote>
+</dd>
+<dt> <a name="process:wait"/>process:wait ()*</dt>
+<dd><p>Wait for process termination and clean up. This function starts background reads for all data on the standard output and standard error channels, and flushes and closes the standard input channel. It then waits for the process to finish. Once finished, the result code from the process and any gathered standard input and standard error are returned.</p>
+h3. Returns:
+
+<ol>
+<li>*number* Result code from the process</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 If a standard output pipe was in use, this is the remaining data on the pipe.</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 If a standard error pipe was in use, this is the reaming data on the pipe.</li>
+</ol>
+</dd>
+</dl>
+
+h2. <a name="File_Utilities"/>File Utilities
+
+<dl>
+<dt> <a name="file&#95;get"/>file&#95;get (name)*</dt>
+<dd><p>Return contents of a file as a string. This function is a wrapper for @g_file_get_contents()@. It is mostly equivalent to @io.open(*name*):read('\*a')@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of file to read</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*nil* Contents of file, or nil if there was an error.</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Error message if there was an error.</li>
+</ol>
+</dd>
+<dt> <a name="file&#95;set"/>file&#95;set (name, contents)*</dt>
+<dd><p>Set contents of file to a string. This function is a wrapper for @g_file_set_contents()@. Rather than write directly to a file, it writes to a temporary first and then moves the result into place.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of file to write</li>
+<li>@contents@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Contents to write</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* True if successful</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 Error message if unsuccessful</li>
+</ol>
+</dd>
+<dt> <a name="is&#95;file"/>is&#95;file (name)*</dt>
+<dd><p>Test if the given path points to a file. This function is a wrapper for @g_file_test()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path name to test</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* true if _name_ names a plain file
+</blockquote>
+</dd>
+<dt> <a name="is&#95;dir"/>is&#95;dir (name)*</dt>
+<dd><p>Test if the given path points to a directory. This function is a wrapper for @g_file_test()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path name to test</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* true if _name_ names a plain file
+</blockquote>
+</dd>
+<dt> <a name="is&#95;symlink"/>is&#95;symlink (name)*</dt>
+<dd><p>Test if the given path points to a symbolic link. This function is a wrapper for @g_file_test()@. Note that if this returns true, the is&#95;dir and is&#95;file tests may still return true as well, since they follow symbolic links.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path name to test</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* true if _name_ names a symbolic link
+</blockquote>
+</dd>
+<dt> <a name="is&#95;exec"/>is&#95;exec (name)*</dt>
+<dd><p>Test if the given path points to an executable file. This function is a wrapper for @g_file_test()@. Note that GLib uses heuristics on Windows, since there is no executable bit to test.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path name to test</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* true if _name_ names an executable file.
+</blockquote>
+</dd>
+<dt> <a name="exists"/>exists (name)*</dt>
+<dd><p>Test if the given path points to a file or directory. This function is a wrapper for @g_file_test()@. Note that invalid symbolic links return false, even though they actually exist.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The path name to test</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* true if _name_ exists in the file system
+</blockquote>
+</dd>
+<dt> <a name="umask"/>umask ([mask])*</dt>
+<dd><p>Change default file and directory creation permissions mask. This is a wrapper for the system @umask()@ function, since there is no equivalent in GLib.</p>
+h3. Parameters:
+
+<ul>
+<li>@mask@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* The permissions mask. Permissions set in this mask are forced off in any newly created files and directories. Either a numeric permissions mask or a POSIX-sytle mode string (e.g. ‘og=w', which is the default if this parameter is unspecified) or the last 9 characters of long directory listing mode (e.g. ‘ -- -w - w-', which is also the default).</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The previous mask.
+</blockquote>
+</dd>
+<dt> <a name="mkstemp"/>mkstemp (tmpl[, perm])*</dt>
+<dd><p>Create a unique temporary file from a pattern. This function is a wrapper for @g_mkstemp()@. It creates a new, unique file by replacing the X characters in a template with six consecutive X characters.</p>
+h3. Parameters:
+
+<ul>
+<li>@tmpl@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The template.</li>
+<li>@perm@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* File creation permissions. Either a numeric permission mask or a POSIX-style mode string (e.g. ‘ug=rw') or the last 9 characters of long directory listing mode (e.g. ‘rwxr-xr-x')</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*file* A file descriptor for the newly created file, open for reading and writing (@w+b@).</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created file.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="open&#95;tmp"/>open&#95;tmp ([tmpl])*</dt>
+<dd><p>Create a unique temporary file in the standard temporary directory. This function is a wrapper for @g_file_open_tmp()@. It creates a new, unique file by replacing the X characters in a template with six consecutive X characters. The template may contain no directory separators.</p>
+h3. Parameters:
+
+<ul>
+<li>@tmpl@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The template. If unspecified, a default template will be used.</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*file* A file descriptor for the newly created file, open for reading and writing (@w+b@).</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The full path name of the created file.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="read&#95;link"/>read&#95;link (name)*</dt>
+<dd><p>Read the contents of a soft link. This is a wrapper for @g_file_read_link()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Link to read</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 Link contents
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="mkdir&#95;with&#95;parents"/>mkdir&#95;with&#95;parents (name[, mode])*</dt>
+<dd><p>Create a directory and any required parent directories. This is a wrapper for @g_mkdir_with_parents()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of directory to create.</li>
+<li>@mode@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* File permissions. Either a numeric creation mode or a POSIX-style mode string (e.g. ‘ug=rw') or the last 9 characters of long directory listing mode (e.g. ‘rwxr-xr-x'). If unspecified, ‘a=rx,u=w' is used (octal 755; ‘rwxr-xr-x')).</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="mkdtemp"/>mkdtemp (tmpl[, mode])*</dt>
+<dd><p>Create a unique tempoarary directory from a pattern. This is a wrapper for @g_mkdtemp@. It replaces 6 consecutive Xs in the pattern with a unique string and creates a directory by that name.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@tmpl@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The file name pattern</li>
+<li>@mode@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* File permissions. Either a numeric creation mode or a POSIX-style mode string (e.g. ‘ug=rw') or the last 9 characters of long directory listing mode (e.g. ‘rwxr-xr-x').</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="dir&#95;make&#95;tmp"/>dir&#95;make&#95;tmp ([tmpl])*</dt>
+<dd><p>Create a unique temporary directory in the standard temporary directory. This is a wrapper for @g_dir_make_tmp()@. It creates a new, unique directory in the standard temporary directory by replacing 6 consecutive Xs in the template.</p>
+<p>This is only available with GLib 2.30 or later.</p>
+h3. Parameters:
+
+<ul>
+<li>@tmpl@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The template. If unspecified, a default template will be used.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the created directory
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="dir"/>dir (d)*</dt>
+<dd><p>Returns an iterator which lists entries in a directory. This function wraps @g_dir_open()@ and friends.</p>
+h3. Parameters:
+
+<ul>
+<li>@d@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The directory to list</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*function* Iterator
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="rename"/>rename (old, new)*</dt>
+<dd><p>Rename a file sytem entity. This is a wrapper for @g_rename()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@old@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The old name</li>
+<li>@new@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The new name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="mkdir"/>mkdir (name[, mode])*</dt>
+<dd><p>Create a directory. This is a wrapper for @g_mkdir()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the directory.</li>
+<li>@mode@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* File permissions. Either a numeric creation mode or a POSIX-style mode string (e.g. ‘ug=rw') or the last 9 characters of long directory listing mode (e.g. ‘rwxr-xr-x'). The default is ‘a=rx,u=w' (octal 755, ‘rwxr-xr-x').</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="stat"/>stat (name[, fields])*</dt>
+<dd><p>Retrieve information on a file system entry. This is a wrapper for @g_stat()@. If a table is given to specify fields, only those fields are returned (nil if not present) as multiple results. Otherwise, a table is returned with all known fields and their values. If the field named ‘link' is requested, it is not an actual field, but an indicator to return information about a soft link rather than what it points to.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The file system entry to query</li>
+<li>@fields@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}&#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,... The fields to query, in order.</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"table":http://www.lua.org/manual/5.1/manual.html#5.5 A table whose keys are field names and whose values are the value for that field, if either no specific values are requested or the only value requested is the psuedo-value ‘link'.</li>
+<li>*number* &#124;"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*nil* The value of each field; multiple values may be returned. Unknown fields return @nil@.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="remove"/>remove (name)*</dt>
+<dd><p>Remove a file sytem entity. This is a wrapper for @g_remove()@. For recursive removal, use Lua:</p>
+bc. function rm_r(f)
+    local ok, msg, err, gmsg
+    if not glib.is_symlink(f) and glib.is_dir(f) then
+        local e
+        for e in glib.dir(f) do
+            ok, msg = rm_r(glib.build_filename(f, e))
+            if not ok and not err then
+                err = true
+                gmsg = msg
+            end
+        end
+    end
+    ok, msg = glib.remove(f)
+    if not ok and not err then
+         err = true
+         gmsg = msg
+    end
+    if err then
+         return false, gmsg
+    else
+         return true
+    end
+end
+
+
+
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The entity to remove</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True on success.
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and an error message string on failure. Note that the error message is probably invalid if the entity was not a directory.</p></dd>
+<dt> <a name="chmod"/>chmod (name, perm)*</dt>
+<dd><p>Change filesystem entry permissions. This is a wrapper for @g_chmod()@. In addition, it will query the original file for information if a string-style permission is used.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The filesystem entry to modify</li>
+<li>@perm@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*number* Permissions to set.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="can&#95;read"/>can&#95;read (name)*</dt>
+<dd><p>Test if fileystem object can be read. This is a wrapper for @g_access()@. Note that this function does not necessarily check access control lists, so it may be better to just test open/read the file.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of object to test</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* true if _name_ can be read.</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 message if _name_ cannot be read.</li>
+<li>*number* error number if _name_ cannot be read.</li>
+</ol>
+</dd>
+<dt> <a name="can&#95;write"/>can&#95;write (name)*</dt>
+<dd><p>Test if fileystem object can be written to. This is a wrapper for @g_access()@. Note that this function does not necessarily check access control lists, so it may be better to just test open/write the file.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of object to test</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* true if _name_ can be written to.</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 message if _name_ cannot be written to.</li>
+<li>*number* error number if _name_ cannot be written to.</li>
+</ol>
+</dd>
+<dt> <a name="chdir"/>chdir (dir)*</dt>
+<dd><p>Change current working directory. This is a wrapper for @g_chdir()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@dir@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of directory to change into</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="utime"/>utime (name[, atime[, mtime]])*</dt>
+<dd><p>Change timestamp on filesystem object. This is a wrapper for @g_utime()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Name of entry to touch</li>
+<li>@atime@: *number* &#124;*nil* access time; _mtime_ is used if not present. Note that _atime_ may not be supported by the target file system entry; no error is returned even if that is the case.</li>
+<li>@mtime@: *number* &#124;*nil* modification time; current time is used if neither _atime_ nor _mtime_ present; left alone if _atime_ present but _mtime_ not present</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="link"/>link (target, name[, soft])*</dt>
+<dd><p>Create a link. This is not a wrapper for any GLib function, since GLib does not support links portably. It creates a hard link or soft link, if supported. Note that on Windows, whether or not the target is a directory must be known at link creation time. This is discovered by checking the target.</p>
+h3. Parameters:
+
+<ul>
+<li>@target@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The link's target</li>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the link to create</li>
+<li>@soft@: *boolean* If true, create a soft link</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns False and an error message string on failure</p></dd>
+</dl>
+
+h2. <a name="URI_Functions"/>URI Functions
+
+<dl>
+<dt> <a name="uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path"/>uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path*</dt>
+<dd>Allowed characters in a path. This is a wrapper for @G_URI_RESERVED_CHARS_ALLOWED_IN_PATH@.</dd>
+<dt> <a name="uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path&#95;element"/>uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;path&#95;element*</dt>
+<dd>Allowed characters in path elements. This is a wrapper for @G_URI_RESERVED_CHARS_ALLOWED_IN_PATH_ELEMENT@.</dd>
+<dt> <a name="uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;userinfo"/>uri&#95;reserved&#95;chars&#95;allowed&#95;in&#95;userinfo*</dt>
+<dd>Allowed characters in userinfo (RFC 3986). This is a wrapper for @G_URI_RESERVED_CHARS_ALLOWED_IN_USERINFO@.</dd>
+<dt> <a name="uri&#95;reserved&#95;chars&#95;generic&#95;delimiters"/>uri&#95;reserved&#95;chars&#95;generic&#95;delimiters*</dt>
+<dd>Generic delimiter characters (RFC 3986). This is a wrapper for @G_URI_RESERVED_CHARS_GENERIC_DELIMITERS@.</dd>
+<dt> <a name="uri&#95;reserved&#95;chars&#95;subcomponent&#95;delimiters"/>uri&#95;reserved&#95;chars&#95;subcomponent&#95;delimiters*</dt>
+<dd>Subcomponent delimiter characters (RFC 3986). This is a wrapper for @G_URI_RESERVED_CHARS_SUBCOMPONENT_DELIMITERS@.</dd>
+<dt> <a name="uri&#95;parse&#95;scheme"/>uri&#95;parse&#95;scheme (uri)*</dt>
+<dd><p>Extract scheme from URI. This is a wrapper for @g_uri_parse_scheme()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The valid URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The scheme
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ on error.</p></dd>
+<dt> <a name="uri&#95;escape&#95;string"/>uri&#95;escape&#95;string (s[, allow[, utf8]])*</dt>
+<dd><p>Escapes a string for use in a URI. This is a wrapper for @g_uri_escape_string()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to esacape; nuls are not allowed.</li>
+<li>@allow@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Reserved characters to leave unescaped anyway.</li>
+<li>@utf8@: *boolean* Allow UTF-8 characters in result.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.
+</blockquote>
+</dd>
+<dt> <a name="uri&#95;unescape&#95;string"/>uri&#95;unescape&#95;string (s[, illegal])*</dt>
+<dd><p>Unescapes an escaped string. This is a wrapper for @g_uri_unescape_string()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to unescape</li>
+<li>@illegal@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Characters which may not appear in the result; nul characters are automatically illegal.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unescaped string.
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ on error.</p></dd>
+<dt> <a name="uri&#95;list&#95;extract&#95;uris"/>uri&#95;list&#95;extract&#95;uris (list)*</dt>
+<dd><p>Splits an URI list conforming to the text/uri-list MIME type (RFC 2483). This is a wrapper for @g_uri_list_extract_uris()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@list@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI list</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the URIs
+</blockquote>
+</dd>
+<dt> <a name="filename&#95;from&#95;uri"/>filename&#95;from&#95;uri (uri)*</dt>
+<dd><p>Converts an ASCII-encoded URI to a local filename. This is a wrapper for @g_filename_from_uri()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The file name</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*nil* The host name, or @nil@ if none</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="filename&#95;to&#95;uri"/>filename&#95;to&#95;uri (file[, host])*</dt>
+<dd><p>Converts an absolute filename to an escaped ASCII-encoded URI. This is a wrapper for @g_filename_to_uri()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@file@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The filename</li>
+<li>@host@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The host name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+</dl>
+
+h2. <a name="Hostname_Utilities"/>Hostname Utilities
+
+<dl>
+<dt> <a name="hostname&#95;to&#95;ascii"/>hostname&#95;to&#95;ascii (hostname)*</dt>
+<dd><p>Convert a host name to its canonical ASCII form. This is a wrapper for @g_hostname_to_ascii()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@hostname@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name to convert</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ on error.</p></dd>
+<dt> <a name="hostname&#95;to&#95;unicode"/>hostname&#95;to&#95;unicode (hostname)*</dt>
+<dd><p>Convert a host name to its canonical Unicode form. This is a wrapper for @g_hostname_to_unicode()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@hostname@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name to convert</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The converted name
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ on error.</p></dd>
+<dt> <a name="hostname&#95;is&#95;non&#95;ascii"/>hostname&#95;is&#95;non&#95;ascii (hostname)*</dt>
+<dd><p>Check if a host name contains Unicode characters. This is a wrapper for @g_hostname_is_non_ascii()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@hostname@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name to check</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if the host name needs to be converted to ASCII for non-IDN-aware contexts.
+</blockquote>
+</dd>
+<dt> <a name="hostname&#95;is&#95;ascii&#95;encoded"/>hostname&#95;is&#95;ascii&#95;encoded (hostname)*</dt>
+<dd><p>Check if a host name contains ASCII-encoded Unicode characters. This is a wrapper for @g_hostname_is_ascii_encoded()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@hostname@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name to check</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if the host name needs to be converted to Unicode for presentation and IDN-aware contexts.
+</blockquote>
+</dd>
+<dt> <a name="hostname&#95;is&#95;ip&#95;address"/>hostname&#95;is&#95;ip&#95;address (hostname)*</dt>
+<dd><p>Check if a string is an IPv4 or IPv6 numeric address. This is a wrapper for @g_hostname_is_ip_address()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@hostname@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name to check</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if the host name is actually an IP address
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Shell-related_Utilities"/>Shell-related Utilities
+
+<dl>
+<dt> <a name="shell&#95;parse&#95;argv"/>shell&#95;parse&#95;argv (cmdline)*</dt>
+<dd><p>Parse a command line into an argument vector, but without variable and glob pattern expansion. This is a wrapper for @g_shell_parse_argv()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@cmdline@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The command line to parse</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the command-line arguments
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="shell&#95;quote"/>shell&#95;quote (s)*</dt>
+<dd><p>Quote a string so it is interpreted unmodified as a shell argument. This is a wrapper for @g_shell_quote()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to quote</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The quoted string
+</blockquote>
+</dd>
+<dt> <a name="shell&#95;unquote"/>shell&#95;unquote (s)*</dt>
+<dd><p>Unquote a string quoted for use as a shell argument. This is a wrapper for @g_shell_unquote()@.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to unquote</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The unquoted string
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+</dl>
+
+h2. <a name="Perl-compatible_Regular_Expressions"/>Perl-compatible Regular Expressions
+
+<dl>
+<dt> <a name="regex&#95;new"/>regex&#95;new (pattern[, cflags[, mflags]])*</dt>
+<dd><p>Compile a regular expression for use in matching functions. This is a wrapper for @g_regex_new()@. See in particular the Regular expression syntax section of the GLib documentation.</p>
+h3. Parameters:
+
+<ul>
+<li>@pattern@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The regular expression. Note that embedded NUL characters are supported.</li>
+<li><p>@cflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}</p>
+<p>Compile flags (note: some may be set by the library based on the pattern input):</p>
+<ul>
+<li>@caseless@  -  Case-insensitive search</li>
+<li>@multiline@  -  ^ and $ match newlines in search strings</li>
+<li>@dotall@  -  . matches newlines</li>
+<li>@extended@  -  unescaped whitespace and unescaped # .. newline ignored</li>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@dollar_endonly@  -  $ does not match newline at end of string</li>
+<li>@ungreedy@  -  Invert greediness of variable-length matches</li>
+<li>@raw@  -  Strings are sequences of bytes rather than UTF-8</li>
+<li>@no_auto_capture@  -  Plain () does not capture (use explicitly named captures)</li>
+<li>@optimize@  -  Optimize the regular expression</li>
+<li>@dupnames@  -  Do not enforce unique subpattern names</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r (default: any).</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n (default: any).</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n (default: any).</li>
+</ul>
+</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}</p>
+<p>Match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z and \z do)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching; incompatible with @all@</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+<li>@all@  -  changes the behavior of matches from returning captures to returning all potential matches. That is, any variable-length matching operator will attempt to match at every possible length, rather than the most/least greedy depending on the ungreedy option an the ? greediness operator. This is incompatible with captures and partial matching.</li>
+</ul>
+</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"regex":#Class_regex The compiled regular expression
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="regex&#95;escape&#95;string"/>regex&#95;escape&#95;string (s)*</dt>
+<dd><p>Escapes a string so it is a literal in a regular expression.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to escape</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string.
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Class_regex"/>Class regex
+
+<dl>
+<dt> <a name="regex:get&#95;pattern"/>regex:get&#95;pattern ()*</dt>
+<dd><p>Get the pattern string used to create this regex.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The pattern string
+</blockquote>
+</dd>
+<dt> <a name="regex:get&#95;max&#95;backref"/>regex:get&#95;max&#95;backref ()*</dt>
+<dd><p>Get the highest back reference in the pattern.</p>
+h3. Returns:
+
+<blockquote>
+
+*number* The number of the highest backreference, or 0 if there are none.
+</blockquote>
+</dd>
+<dt> <a name="regex:get&#95;capture&#95;count"/>regex:get&#95;capture&#95;count ()*</dt>
+<dd><p>Get the number of capturing subpatterns in the pattern.</p>
+h3. Returns:
+
+<blockquote>
+
+*number* The number of capturing subpatterns.
+</blockquote>
+</dd>
+<dt> <a name="regex:get&#95;string&#95;number"/>regex:get&#95;string&#95;number (name)*</dt>
+<dd><p>Get the number of the capturing subexpression with the given name.</p>
+h3. Parameters:
+
+<ul>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The subexpression name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The subexpression number, or -1 if _name_ does not exist
+</blockquote>
+</dd>
+<dt> <a name="regex:get&#95;compile&#95;flags"/>regex:get&#95;compile&#95;flags ()*</dt>
+<dd><p>Get the names of all compile flags set when regex was created.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.
+</blockquote>
+</dd>
+<dt> <a name="regex:get&#95;match&#95;flags"/>regex:get&#95;match&#95;flags ()*</dt>
+<dd><p>Get the names of all matching flags set when regex was created.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The names of any flags set when regex was created.
+</blockquote>
+</dd>
+<dt> <a name="regex:find"/>regex:find (s[, start[, mflags]])*</dt>
+<dd><p>Search for a match in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}</p>
+<p>Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching; incompatible with @all@</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+<li>@all@  -  changes the behavior of matches from returning captures to returning all potential matches. That is, any variable-length matching operator will attempt to match at every possible length, rather than the most/least greedy depending on the ungreedy option an the ? greediness operator. This is incompatible with captures and partial matching.</li>
+</ul>
+</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*number* &#124;*nil* &#124;*boolean* The location of the start of the first match, or @nil@ if there are no matches, or false if there is only a partial match, in which case no further results are returned (the location of the match cannot be determined, and there are no captures).</li>
+<li>*number* The location of the last character of the first match</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* ,...On a successful match, all captures are returned as well. If a capture does not exist, false is returned for that capture. For @all@ mode, these are actually all possible matches except the maximal match, which is described by the first two return values.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find
+</blockquote>
+</dd>
+<dt> <a name="regex:tfind"/>regex:tfind (s[, start[, mflags]])*</dt>
+<dd><p>Search for a match in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}</p>
+<p>Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching; incompatible with @all@</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+<li>@all@  -  changes the behavior of matches from returning captures to returning all potential matches. That is, any variable-length matching operator will attempt to match at every possible length, rather than the most/least greedy depending on the ungreedy option an the ? greediness operator. This is incompatible with captures and partial matching.</li>
+</ul>
+</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*number* &#124;*nil* &#124;*boolean* The location of the start of the first match, or @nil@ if there are no matches, or false if there is only a partial match, in which case no further results are returned (the location of the match cannot be determined, and there are no captures).</li>
+<li>*number* The location of the last character of the first match</li>
+<li>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* ,...}On a successful match, all captures are returned as well. If a capture does not exist, false is returned for that capture. If there are no captures, an empty table is returned. For @all@ mode, these are actually all possible matches except the maximal match, which is described by the first two return values.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"string.find":http://www.lua.org/manual/5.1/manual.html#pdf-string.find
+</blockquote>
+</dd>
+<dt> <a name="regex:match"/>regex:match (s[, start[, mflags]])*</dt>
+<dd><p>Search for a match in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}</p>
+<p>Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching; incompatible with @all@</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+<li>@all@  -  changes the behavior of matches from returning captures to returning all potential matches. That is, any variable-length matching operator will attempt to match at every possible length, rather than the most/least greedy depending on the ungreedy option an the ? greediness operator. This is incompatible with captures and partial matching.</li>
+</ul>
+</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*nil* &#124;*boolean* The first capture, or the full match if there are no captures, or @nil@ if there are no matches, or false if there is only a partial match (in which case there are no captures).</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* ,...On a successful match, all remaining captures are returned as well. If a capture does not exist, false is returned for that capture. For @all@ mode, which has no captures, these are all possible matches but the maximal match, which is the first returned string.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"string.match":http://www.lua.org/manual/5.1/manual.html#pdf-string.match
+</blockquote>
+</dd>
+<dt> <a name="regex:gmatch"/>regex:gmatch (s[, start[, mflags]])*</dt>
+<dd><p>Search for all matches in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+</ul>
+
+<p>Note that a regex created using @all@ will return an error.</p></li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*function* An iterator function which, on each iteration, returns the same as "regex:match":#regex:match would have for the next match in the string.
+</blockquote>
+
+h3. see also:
+
+<ul>
+<li>"string.gmatch":http://www.lua.org/manual/5.1/manual.html#pdf-string.gmatch</li>
+<li>"regex:match":#regex:match</li>
+</ul>
+</dd>
+<dt> <a name="regex:gfind"/>regex:gfind (s[, start[, mflags]])*</dt>
+<dd><p>Search for all matches in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+</ul>
+
+<p>Note that a regex created using @all@ will return an error.</p></li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*function* An iterator function which, on each iteration, returns the same as "regex:find":#regex:find would have for the next match in the string.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"regex:find":#regex:find
+</blockquote>
+</dd>
+<dt> <a name="regex:gtfind"/>regex:gtfind (s[, start[, mflags]])*</dt>
+<dd><p>Search for all matches in a string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to search</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@partial@  -  use partial (incremental) matching</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+</ul>
+
+<p>Note that a regex created using @all@ will return an error.</p></li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*function* An iterator function which, on each iteration, returns the same as "regex:tfind":#regex:tfind would have for the next match in the string.
+</blockquote>
+
+h3. see also:
+
+<blockquote>
+
+"regex:tfind":#regex:tfind
+</blockquote>
+</dd>
+<dt> <a name="regex:split"/>regex:split (s[, start[, mflags[, max]]])*</dt>
+<dd><p>Split a string with a regular expression separator.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to split</li>
+<li>@start@: *number* The start position.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+</ul>
+
+<p>Note that a regex created using @all@ or @partial@ will return an error.</p></li>
+<li>@max@: *number* The maximum number of elements to return. If unspecified or less than 1, all elements are returned.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* ,...}</p>
+<p>The elements separated by the regular expression. Each element is separated by any capture strings from the separator, if present. If a capture does not exist, false is returned for that capture. If there are no captures, only the elements are returned. For example:</p>
+bc.  rx = glib.regex_new('\\|(.?)\\|')
+ spl = rx:split('abc||def|!|ghi')
+  -- { 'abc', '', 'def', '!', 'ghi' }
+
+
+
+</blockquote>
+</dd>
+<dt> <a name="regex:gsub"/>regex:gsub (s, repl[, start[, n[, mflags]]])*</dt>
+<dd><p>Replace occurrences of regular expression in string.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to modify. Note that zeroes are not supported in the final result string, whether they stem from _s_ or _repl_.</li>
+<li>@repl@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;"table":http://www.lua.org/manual/5.1/manual.html#5.5 &#124;*function* The replacement. If this is a string, the string is the replacement text, which supports backslash-escapes for capture substitution and case conversion. If it is a table, the first capture (or entire match if there are no captures, or false if the capture exists but is not matched) is used as a key into the table; if the value is a string or number, it is the literal replacement text; otherwise, if the value is false or @nil@, no substitution is made. If it is a function, the function is called for every match, with all captures (or the entire match if there are no captures) as arguments (as with "regex:match":#regex:match , captures which do not exist are passed as false); the return value is treated like the table entries. For literal interpretation of a string, call "regex&#95;escape&#95;string":#regex_escape_string on it first.</li>
+<li>@start@: *number* The start position.</li>
+<li>@n@: *number* &#124;*function* The maximum number of replacements, if specified as a number greater than 0. If specified as a function, the function is called after determining the potential replacement text. Its parameters are the full match start position, the full match end position, and the potential replacement text (or false/@nil@ if no replacement is to be made). The function must return two values: the first is the replacement operation: true if normal replacement is to be made, false if no replacement is to be made, and a string if an alternate replacement is to be made. The second is the conintuation flag: if absent, @nil@, or false, continue replacement, and if true, continue globally without checking _n_, and if a number, continue that many iterations maximum without checking _n_.</li>
+<li><p>@mflags@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} Additional match flags:</p>
+<ul>
+<li>@anchored@  -  pattern must match at start of string</li>
+<li>@notbol@  -  ^ does not match the start of string (but \A does)</li>
+<li>@noteol@  -  $ does not match the end of string (but \Z does)</li>
+<li>@notempty@  -  the match length must be greater than zero</li>
+<li>@newline_cr@  -  Newlines for $, ^, and . are \r.</li>
+<li>@newline_lf@  -  Newlines for $, ^, and . are \n.</li>
+<li>@newline_crlf@  -  Newlines for $, ^, and . are \r\n.</li>
+<li>@newline_any@  -  Newlines for $, ^, and . are any.</li>
+</ul>
+
+<p>Note that a regex created using @all@ or @partial@ will return an error.</p></li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The substituted string</li>
+<li>*number* The number of matches</li>
+<li>*number* The number of substitutions</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"regex&#95;escape&#95;string":#regex_escape_string
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Simple_XML_Subset_Parser"/>Simple XML Subset Parser
+
+The following functions use varargs, and are not supported:
+
+@g_markup_*printf_escaped()@: emulate using string concat and renaming of escaper to shorter name:
+
+bc.  e = glib.markup_escape_text
+ output = '<purchase>' ..
+          '<store>' .. e(store) .. '</store>' ..
+          '<item>' .. e(item) .. '</item>' ..
+          '</purchase>'
+
+
+
+@g_markup_collect_attributes()@: the only useful bit here that is for some reason not exposed independently is the boolean parser. Otherwise, it's best to emulate using lua:
+
+<pre>
+-- usage:
+attrs, msg = collect_attrs(attr_names, attr_vals,
+                           {a='str', b='bool', c='?bool', ...})
+if not attrs then print(&quot;error: &quot; .. msg) end
+
+-- only allocate/parse once
+local bool_rx = glib.regex_new('^(false|f|no|n|0)|(true|t|yes|y|1)$', {'caseless'})
+-- could pass in el_name for better error message
+function collect_attrs(attr_names, attr_vals, req_parms)
+  -- return attr=value table
+  local attrs = {}
+  -- put attrs i table, checking for duplicates
+  local i, v
+  for i, v in ipairs(attr_names) do
+    if attrs[v] then return nil, &quot;duplicate attribute &quot; .. v end
+    attrs[v] = attr_vals[i]
+  end
+  -- parse values, ensuring they are in req_parms as well
+  local n
+  for n, v in pairs(attrs) do
+    local isreq = req_parms[n]
+    if not isreq then return nil, &quot;unknown attribute &quot; .. n end
+    if isreq:sub(1, 1) == '?' then isreq = isreq:sub(2) end
+    if isreq == 'bool' then
+      local f = bool_rx:match(v)
+      if not f then return nil, &quot;invalid boolean &quot; .. n end
+      attrs[n] = f == ''
+    end
+  end
+  -- ensure that only optional values are missing
+  for n, v in pairs(req_parms) do
+    if v:sub(1, 1) ~= '?' and attrs[n] == nil then
+      return nil, &quot;missing attr &quot; .. n
+    end
+  end
+  return attrs
+end
+
+</pre>
+
+<dl>
+<dt> <a name="markup&#95;escape&#95;text"/>markup&#95;escape&#95;text (s)*</dt>
+<dd><p>Escape text so GMarkup XML parsing will return it to original.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The string to escape</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The escaped string
+</blockquote>
+</dd>
+<dt> <a name="&#95;gmarkup&#95;start&#95;element&#95;"/>&#95;gmarkup&#95;start&#95;element&#95; (ctx, name, attr&#95;names, attr&#95;values)*</dt>
+<dd><p>The function called when an opening tag of an element is seen.</p>
+h3. Parameters:
+
+<ul>
+<li>@ctx@: "markup&#95;parse&#95;context":#Class_markup_parse_context The context in which this was called</li>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the element being started</li>
+<li>@attr_names@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} The names of the attributes in this tag, in order</li>
+<li>@attr_values@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} The values of the attributes in this tag, in the same order as the names.</li>
+</ul>
+
+h3. Usage:
+
+<blockquote>
+
+bc(example). function counter()
+  local count = 0
+  return {
+    start_element = function() count = count + 1 end,
+    pop = function() return count end
+  }
+end
+gmp = markup_parse_context_new {
+   start_element = function(ctx, el, ...)
+     if el == 'count' return counter() end
+   end,
+   end_element = function(ctx, n, pop)
+     if pop then print(pop()) end
+   end
+}
+
+
+</blockquote>
+
+h3. Returns:
+
+<blockquote>
+
+<p>{"string":http://www.lua.org/manual/5.1/manual.html#5.4 =*value* ,...}&#124;*nil*</p>
+<p>If present and a table, push the parser context and use the returned parser instead. The current parser will resume upon reaching the associated end element. See "markup&#95;parse&#95;context&#95;new":#markup_parse_context_new for details.</p>
+<ul>
+<li>*start&#95;element*: a function like "&#95;gmarkup&#95;start&#95;element&#95;":#_gmarkup_start_element_ .</li>
+<li>*end&#95;element*: a function like "&#95;gmarkup&#95;end&#95;element&#95;":#_gmarkup_end_element_ .</li>
+<li>*text*: a function like "&#95;gmarkup&#95;text&#95;":#_gmarkup_text_ .</li>
+<li>*passthrough*: a function like "&#95;gmarkup&#95;passthrough&#95;":#_gmarkup_passthrough_ .</li>
+<li>*error*: a function like "&#95;gmarkup&#95;error&#95;":#_gmarkup_error_ .</li>
+<li>*pop*: a value to pass to the _end&#95;element_ handler when finished. It may be any value, but a function is probably most suitable. There is no guarantee that this value will ever be used, since it requires that no errors occur and that the _end&#95;element_ handler actually uses it.</li>
+</ul>
+
+</blockquote>
+
+h3. Raises:
+
+<p>Returns error message string on error.</p>
+h3. see also:
+
+<ul>
+<li>"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new</li>
+<li>"&#95;gmarkup&#95;end&#95;element&#95;":#_gmarkup_end_element_</li>
+<li>"&#95;gmarkup&#95;text&#95;":#_gmarkup_text_</li>
+<li>"&#95;gmarkup&#95;passthrough&#95;":#_gmarkup_passthrough_</li>
+<li>"&#95;gmarkup&#95;error&#95;":#_gmarkup_error_</li>
+</ul>
+</dd>
+<dt> <a name="&#95;gmarkup&#95;end&#95;element&#95;"/>&#95;gmarkup&#95;end&#95;element&#95; (ctx, name[, pop])*</dt>
+<dd><p>The function called when an ending tag of an element is seen.</p>
+h3. Parameters:
+
+<ul>
+<li>@ctx@: "markup&#95;parse&#95;context":#Class_markup_parse_context The context in which this was called</li>
+<li>@name@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the element being started</li>
+<li>@pop@: *any* If the context was previously pushed, and this is called for the terminating element of that context, this is the @pop@ element which was pushed along with the parser.</li>
+</ul>
+
+h3. Raises:
+
+<p>Returns error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
+</blockquote>
+</dd>
+<dt> <a name="&#95;gmarkup&#95;text&#95;"/>&#95;gmarkup&#95;text&#95; (ctx, text)*</dt>
+<dd><p>The function called when text within an element is seen.</p>
+h3. Parameters:
+
+<ul>
+<li>@ctx@: "markup&#95;parse&#95;context":#Class_markup_parse_context The context in which this was called</li>
+<li>@text@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text.</li>
+</ul>
+
+h3. Raises:
+
+<p>Returns error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
+</blockquote>
+</dd>
+<dt> <a name="&#95;gmarkup&#95;passthrough&#95;"/>&#95;gmarkup&#95;passthrough&#95; (ctx, text)*</dt>
+<dd><p>The function called when unprocessed text is seen.</p>
+h3. Parameters:
+
+<ul>
+<li>@ctx@: "markup&#95;parse&#95;context":#Class_markup_parse_context The context in which this was called</li>
+<li>@text@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The text.</li>
+</ul>
+
+h3. Raises:
+
+<p>Returns error message string on error.</p>
+h3. see also:
+
+<blockquote>
+
+"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
+</blockquote>
+</dd>
+<dt> <a name="&#95;gmarkup&#95;error&#95;"/>&#95;gmarkup&#95;error&#95; (ctx, text)*</dt>
+<dd><p>The function called when an error occurs during parsing.</p>
+h3. Parameters:
+
+<ul>
+<li>@ctx@: "markup&#95;parse&#95;context":#Class_markup_parse_context The context in which this was called</li>
+<li>@text@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The error text.</li>
+</ul>
+
+h3. see also:
+
+<blockquote>
+
+"markup&#95;parse&#95;context&#95;new":#markup_parse_context_new
+</blockquote>
+</dd>
+<dt> <a name="markup&#95;parse&#95;context&#95;new"/>markup&#95;parse&#95;context&#95;new (options)*</dt>
+<dd><p>Create GMarkup parser.</p>
+h3. Parameters:
+
+<ul>
+<li><p>@options@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 =*value* ,...}</p>
+<p>Context creation options:</p>
+<ul>
+<li>*start&#95;element*: a function like "&#95;gmarkup&#95;start&#95;element&#95;":#_gmarkup_start_element_ .</li>
+<li>*end&#95;element*: a function like "&#95;gmarkup&#95;end&#95;element&#95;":#_gmarkup_end_element_ .</li>
+<li>*text*: a function like "&#95;gmarkup&#95;text&#95;":#_gmarkup_text_ .</li>
+<li>*passthrough*: a function like "&#95;gmarkup&#95;passthrough&#95;":#_gmarkup_passthrough_ .</li>
+<li>*error*: a function like "&#95;gmarkup&#95;error&#95;":#_gmarkup_error_ .</li>
+<li>*treat&#95;cdata&#95;as&#95;text*: If set and not false, return CDATA sections as text instead of passthrough.</li>
+<li>*prefix&#95;error&#95;position*: If set and not false, prefix error messages returned by the above functions with line and column information.</li>
+</ul>
+</li>
+</ul>
+
+h3. see also:
+
+<ul>
+<li>"&#95;gmarkup&#95;start&#95;element&#95;":#_gmarkup_start_element_</li>
+<li>"&#95;gmarkup&#95;end&#95;element&#95;":#_gmarkup_end_element_</li>
+<li>"&#95;gmarkup&#95;text&#95;":#_gmarkup_text_</li>
+<li>"&#95;gmarkup&#95;passthrough&#95;":#_gmarkup_passthrough_</li>
+<li>"&#95;gmarkup&#95;error&#95;":#_gmarkup_error_</li>
+</ul>
+</dd>
+</dl>
+
+h2. <a name="Class_markup&#95;parse&#95;context"/>Class markup&#95;parse&#95;context
+
+<dl>
+<dt> <a name="markup&#95;parse&#95;context:end&#95;parse"/>markup&#95;parse&#95;context:end&#95;parse ()*</dt>
+<dd><p>Finish parsing.</p>
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="markup&#95;parse&#95;context:get&#95;position"/>markup&#95;parse&#95;context:get&#95;position ()*</dt>
+<dd><p>Obtain current position in source text.</p>
+h3. Returns:
+
+<ol>
+<li>*number* The line number</li>
+<li>*number* The column number</li>
+</ol>
+</dd>
+<dt> <a name="markup&#95;parse&#95;context:get&#95;element"/>markup&#95;parse&#95;context:get&#95;element ()*</dt>
+<dd><p>Obtain the name of the current element being processed.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The element name.
+</blockquote>
+</dd>
+<dt> <a name="markup&#95;parse&#95;context:get&#95;element&#95;stack"/>markup&#95;parse&#95;context:get&#95;element&#95;stack ()*</dt>
+<dd><p>Obtain the complete path of element names to the current element being processed.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The element names, starting with the most deeply nested.
+</blockquote>
+</dd>
+<dt> <a name="markup&#95;parse&#95;context:parse"/>markup&#95;parse&#95;context:parse (s)*</dt>
+<dd><p>Parse some text.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The next chunk of text to process</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+</dl>
+
+h2. <a name="Key-value_file_parser"/>Key-value file parser
+
+<dl>
+<dt> <a name="key&#95;file&#95;new"/>key&#95;file&#95;new ()*</dt>
+<dd><p>Create a new, empty key file.</p>
+h3. Returns:
+
+<blockquote>
+
+"key&#95;file":#Class_key_file The empty key file
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Class_key&#95;file"/>Class key&#95;file
+
+<dl>
+<dt> <a name="key&#95;file:set&#95;list&#95;separator"/>key&#95;file:set&#95;list&#95;separator (sep)*</dt>
+<dd><p>Sets character to separate values in lists.</p>
+h3. Parameters:
+
+<ul>
+<li>@sep@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The separator (only the first byte is used).</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:load&#95;from&#95;file"/>key&#95;file:load&#95;from&#95;file (f[, dirs[, keep&#95;com[, keep&#95;trans]]])*</dt>
+<dd><p>Load a file.</p>
+h3. Parameters:
+
+<ul>
+<li>@f@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 File name</li>
+<li>@dirs@: *boolean* &#124;{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} If true, search relative to standard configuration file directories. If a table, search realtive to all directories in the table. Otherwise, the file name is absolute or relative to the current directory.</li>
+<li>@keep_com@: *boolean* If true, keep comments so they are written by "key&#95;file:to&#95;data":#key_file:to_data .</li>
+<li>@keep_trans@: *boolean* If true, keep all translations so they are written by "key&#95;file:to&#95;data":#key_file:to_data .</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* True</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The actual file name if a directory search was done.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:load&#95;from&#95;data"/>key&#95;file:load&#95;from&#95;data (s[, keep&#95;com[, keep&#95;trans]])*</dt>
+<dd><p>Load data.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data</li>
+<li>@keep_com@: *boolean* If true, keep comments so they are written by "key&#95;file:to&#95;data":#key_file:to_data .</li>
+<li>@keep_trans@: *boolean* If true, keep all translations so they are written by "key&#95;file:to&#95;data":#key_file:to_data .</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:to&#95;data"/>key&#95;file:to&#95;data ()*</dt>
+<dd><p>Convert entire key file to a string.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The key file contents
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;start&#95;group"/>key&#95;file:get&#95;start&#95;group ()*</dt>
+<dd><p>Get the start group of the key file.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of the start group
+</blockquote>
+</dd>
+<dt> <a name="key&#95;file:get&#95;groups"/>key&#95;file:get&#95;groups ()*</dt>
+<dd><p>Get the names of all groups in the key file.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all the groups.
+</blockquote>
+</dd>
+<dt> <a name="key&#95;file:get&#95;keys"/>key&#95;file:get&#95;keys (group)*</dt>
+<dd><p>Get the names of all keys in a group.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The name of a group to query</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}A table containing the names of all keys in the &#42;group
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:has&#95;group"/>key&#95;file:has&#95;group (group)*</dt>
+<dd><p>Check if group exists.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if group exists in key file.
+</blockquote>
+</dd>
+<dt> <a name="key&#95;file:has&#95;key"/>key&#95;file:has&#95;key (group, key)*</dt>
+<dd><p>Check if key exists.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if key exists in key file.
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:raw&#95;get"/>key&#95;file:raw&#95;get (group, key)*</dt>
+<dd><p>Obtain raw value of a key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The value
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get"/>key&#95;file:get (group, key[, locale])*</dt>
+<dd><p>Obtain value of a key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@locale@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 If specified, get value translated into this locale, if available</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The parsed UTF-8 value
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;boolean"/>key&#95;file:get&#95;boolean (group, key)*</dt>
+<dd><p>Obtain value of a boolean key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* The value
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;number"/>key&#95;file:get&#95;number (group, key)*</dt>
+<dd><p>Obtain value of a numeric key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The value
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;list"/>key&#95;file:get&#95;list (group, key[, locale])*</dt>
+<dd><p>Obtain value of a string list key. Note that while "key&#95;file:set&#95;list":#key_file:set_list escapes characters such as separators, this function does not handle such escapes correctly. It would be better to just use "key&#95;file:raw&#95;get":#key_file:raw_get and parse the list out manually if escaped characters might be present.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@locale@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 If specified, get value translated into this locale, if available</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of parsed UTF-8 values
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;boolean&#95;list"/>key&#95;file:get&#95;boolean&#95;list (group, key)*</dt>
+<dd><p>Obtain value of a boolean list key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{*boolean* ,...}The list of values
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;number&#95;list"/>key&#95;file:get&#95;number&#95;list (group, key)*</dt>
+<dd><p>Obtain value of a number list key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{*number* ,...}The list of values
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:get&#95;comment"/>key&#95;file:get&#95;comment ([group[, key]])*</dt>
+<dd><p>Obtain comment above a key or group.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name; if unspecified, the first group is used, and _key_ is ignored.</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name; if specified, obtain comment above the key; otherwise, obtain comment above group</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;The comment string
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:raw&#95;set"/>key&#95;file:raw&#95;set (group, key, value)*</dt>
+<dd><p>Set raw value of a key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name</li>
+<li>@value@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The value</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set"/>key&#95;file:set (group, key, value[, locale])*</dt>
+<dd><p>Set value of a key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@value@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The value</li>
+<li>@locale@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* If a string, set value translated into this locale. Otherwise, if true, set value translated into current locale.</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;boolean"/>key&#95;file:set&#95;boolean (group, key, value)*</dt>
+<dd><p>Set value of a boolean key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@value@: *boolean* The value</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;number"/>key&#95;file:set&#95;number (group, key, value)*</dt>
+<dd><p>Set value of a numeric key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@value@: *number* The value</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;list"/>key&#95;file:set&#95;list (group, key, value[, locale])*</dt>
+<dd><p>Set value of a string list key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@value@: {"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...} The value</li>
+<li>@locale@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 &#124;*boolean* If a string, set value translated into this locale. Otherwise, if true, set value translated into current locale.</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;boolean&#95;list"/>key&#95;file:set&#95;boolean&#95;list (group, key, value)*</dt>
+<dd><p>Set value of a boolean list key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+<li>@value@: {*boolean* ,...} The value</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;number&#95;list"/>key&#95;file:set&#95;number&#95;list (group, key)*</dt>
+<dd><p>Set value of a number list key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key</li>
+</ul>
+</dd>
+<dt> <a name="key&#95;file:set&#95;comment"/>key&#95;file:set&#95;comment (comment[, group[, key]])*</dt>
+<dd><p>Set comment above a key or group.</p>
+h3. Parameters:
+
+<ul>
+<li>@comment@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The comment</li>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name; if unspecified, the first group is used, and _key_ is ignored.</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name; if specified, obtain comment above the key; otherwise, obtain comment above group</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:remove"/>key&#95;file:remove (group[, key])*</dt>
+<dd><p>Remove a group or key.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key. If specified, remove that key. Otherwise, remove the group _group_.</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="key&#95;file:remove&#95;comment"/>key&#95;file:remove&#95;comment ([group[, key]])*</dt>
+<dd><p>Remove comment above a key or group.</p>
+h3. Parameters:
+
+<ul>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group name; if unspecified, the first group is used, and _key_ is ignored.</li>
+<li>@key@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The key name; if specified, obtain comment above the key; otherwise, obtain comment above group</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+</dl>
+
+h2. <a name="Bookmark_file_parser"/>Bookmark file parser
+
+<dl>
+<dt> <a name="bookmark&#95;file&#95;new"/>bookmark&#95;file&#95;new ()*</dt>
+<dd><p>Create a new, empty bookmark file.</p>
+h3. Returns:
+
+<blockquote>
+
+"bookmark&#95;file":#Class_bookmark_file The empty bookmark file.
+</blockquote>
+</dd>
+</dl>
+
+h2. <a name="Class_bookmark&#95;file"/>Class bookmark&#95;file
+
+<dl>
+<dt> <a name="bookmark&#95;file:load&#95;from&#95;file"/>bookmark&#95;file:load&#95;from&#95;file (f[, use&#95;dirs])*</dt>
+<dd><p>Load a file.</p>
+h3. Parameters:
+
+<ul>
+<li>@f@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 File name</li>
+<li>@use_dirs@: *boolean* If true, search relative to standard configuration file directories.</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>*boolean* True</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The actual file name if a directory search was done.</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:load&#95;from&#95;data"/>bookmark&#95;file:load&#95;from&#95;data (s)*</dt>
+<dd><p>Load data.</p>
+h3. Parameters:
+
+<ul>
+<li>@s@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The data</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:to&#95;data"/>bookmark&#95;file:to&#95;data ()*</dt>
+<dd><p>Convert bookmark file to a string.</p>
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 The bookmark file contents
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:to&#95;file"/>bookmark&#95;file:to&#95;file (f)*</dt>
+<dd><p>Write bookmark file to a file.</p>
+h3. Parameters:
+
+<ul>
+<li>@f@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The file name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:has&#95;item"/>bookmark&#95;file:has&#95;item (uri)*</dt>
+<dd><p>Check if bookmark file has given URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI to find</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if present
+</blockquote>
+</dd>
+<dt> <a name="bookmark&#95;file:has&#95;group"/>bookmark&#95;file:has&#95;group (uri, group)*</dt>
+<dd><p>Check if bookmark file has given URI in a given group.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI to find</li>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group to find</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if present in group
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:has&#95;application"/>bookmark&#95;file:has&#95;application (uri, app)*</dt>
+<dd><p>Check if bookmark file has given URI registered by a given application.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI to find</li>
+<li>@app@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The application</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if registed by application
+</blockquote>
+</dd>
+<dt> <a name="bookmark&#95;file:&#95;&#95;len"/>bookmark&#95;file:&#95;&#95;len ()*</dt>
+<dd><p>Get the number of bookmarks. This is the standard Lua # operator, applied to a bookmark file.</p>
+h3. Returns:
+
+<blockquote>
+
+*number* The number of bookmarks.
+</blockquote>
+</dd>
+<dt> <a name="bookmark&#95;file:uris"/>bookmark&#95;file:uris ()*</dt>
+<dd><p>Get all URIs.</p>
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}All URIs.
+</blockquote>
+</dd>
+<dt> <a name="bookmark&#95;file:title"/>bookmark&#95;file:title (uri)*</dt>
+<dd><p>Get title for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its title
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:description"/>bookmark&#95;file:description (uri)*</dt>
+<dd><p>Get description for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its description
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:mime&#95;type"/>bookmark&#95;file:mime&#95;type (uri)*</dt>
+<dd><p>Get MIME type for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+"string":http://www.lua.org/manual/5.1/manual.html#5.4 Its MIME type
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:is&#95;private"/>bookmark&#95;file:is&#95;private (uri)*</dt>
+<dd><p>Get private flag for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True if private flag set
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:icon"/>bookmark&#95;file:icon (uri)*</dt>
+<dd><p>Get icon for URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The icon URL</li>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The icon's MIME type</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:added"/>bookmark&#95;file:added (uri)*</dt>
+<dd><p>Get time URI was added.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The time stamp, as seconds from epoch
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:modified"/>bookmark&#95;file:modified (uri)*</dt>
+<dd><p>Get time URI was last modified.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The time stamp, as seconds from epoch
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:visited"/>bookmark&#95;file:visited (uri)*</dt>
+<dd><p>Get time URI was last visited.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*number* The time stamp, as seconds from epoch
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:groups"/>bookmark&#95;file:groups (uri)*</dt>
+<dd><p>Get list of groups to which URI belongs.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:applications"/>bookmark&#95;file:applications (uri)*</dt>
+<dd><p>Get list of applications which registered this URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of applications
+</blockquote>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:boomark&#95;file:app&#95;info"/>bookmark&#95;file:boomark&#95;file:app&#95;info (uri, app)*</dt>
+<dd><p>Obtain registration information for application which registered URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@app@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Application name</li>
+</ul>
+
+h3. Returns:
+
+<ol>
+<li>"string":http://www.lua.org/manual/5.1/manual.html#5.4 The command to invoke _app_ on _uri_</li>
+<li>*number* The number of times _app_ registered _uri_</li>
+<li>*number* The last time _app_ registered _uri_</li>
+</ol>
+
+h3. Raises:
+
+<p>Returns @nil@ and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:set&#95;title"/>bookmark&#95;file:set&#95;title ([uri], title)*</dt>
+<dd><p>Set title for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI. If @nil@, the title of the bookmark file is set.</li>
+<li>@title@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The new title</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;description"/>bookmark&#95;file:set&#95;description ([uri], desc)*</dt>
+<dd><p>Set description for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI. If @nil@, the title of the bookmark file is set.</li>
+<li>@desc@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The new description</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;mime&#95;type"/>bookmark&#95;file:set&#95;mime&#95;type (uri, mime&#95;type)*</dt>
+<dd><p>Set MIME type for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@mime_type@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The new MIME type</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;is&#95;private"/>bookmark&#95;file:set&#95;is&#95;private (uri, private)*</dt>
+<dd><p>Set private flag for URI</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@private@: *boolean* The new flag</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;icon"/>bookmark&#95;file:set&#95;icon (uri, icon, mime&#95;type)*</dt>
+<dd><p>Set icon for URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@icon@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The icon URL</li>
+<li>@mime_type@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The icon's MIME type</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;added"/>bookmark&#95;file:set&#95;added (uri, time)*</dt>
+<dd><p>Set time URI was added.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@time@: *number* The time stamp, as seconds from epoch</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;modified"/>bookmark&#95;file:set&#95;modified (uri, time)*</dt>
+<dd><p>Set time URI was modified.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@time@: *number* The time stamp, as seconds from epoch</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;visited"/>bookmark&#95;file:set&#95;visited (uri, time)*</dt>
+<dd><p>Set time URI was visited.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@time@: *number* The time stamp, as seconds from epoch</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;groups"/>bookmark&#95;file:set&#95;groups (uri)*</dt>
+<dd><p>Set list of groups to which URI belongs.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+{"string":http://www.lua.org/manual/5.1/manual.html#5.4 ,...}The list of groups
+</blockquote>
+</dd>
+<dt> <a name="bookmark&#95;file:set&#95;app&#95;info"/>bookmark&#95;file:set&#95;app&#95;info (uri, app, exec[, rcount[, stamp]])*</dt>
+<dd><p>Set registration information for application which registered URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@app@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 Application name</li>
+<li>@exec@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The command to invoke _app_ on _uri_ (%f == file, %u == uri)</li>
+<li>@rcount@: *number* The number of times _app_ registered _uri_ (absent, @nil@, or less than 0 to simply increment, or 0 to remove)</li>
+<li>@stamp@: *number* The last time _app_ registered _uri_ (or -1, @nil@, or absent for current time)</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:add&#95;group"/>bookmark&#95;file:add&#95;group (uri, group)*</dt>
+<dd><p>Add a group to the list of groups URI belongs to.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:add&#95;application"/>bookmark&#95;file:add&#95;application (uri, app, exec)*</dt>
+<dd><p>Add an application to the list of applications that registered this URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@app@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The application name</li>
+<li>@exec@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The command line to invoke application on URI (%f = file, %u = URI)</li>
+</ul>
+</dd>
+<dt> <a name="bookmark&#95;file:remove&#95;group"/>bookmark&#95;file:remove&#95;group (uri, group)*</dt>
+<dd><p>Remove a group from the list of groups URI belongs to.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@group@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The group</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:remove&#95;application"/>bookmark&#95;file:remove&#95;application (uri, app)*</dt>
+<dd><p>Remove an application from the list of applications that registered this URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@app@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The application name</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:remove"/>bookmark&#95;file:remove (uri)*</dt>
+<dd><p>Remove URI.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+<dt> <a name="bookmark&#95;file:move"/>bookmark&#95;file:move (uri, new)*</dt>
+<dd><p>Change URI, retaining group and application information.</p>
+h3. Parameters:
+
+<ul>
+<li>@uri@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The URI</li>
+<li>@new@: "string":http://www.lua.org/manual/5.1/manual.html#5.4 The new URI</li>
+</ul>
+
+h3. Returns:
+
+<blockquote>
+
+*boolean* True
+</blockquote>
+
+h3. Raises:
+
+<p>Returns false and error message string on error.</p></dd>
+</dl>
+
+_generated by "LDoc 1.2":http://github.com/stevedonovan/LDoc_
+
