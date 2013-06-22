@@ -2563,7 +2563,7 @@ static int glib_path_canonicalize(lua_State *L)
 	act = g_string_new(path);
     /* next, iterate over path elements, resolving soft links if needed */
     {
-	int pos;
+	int pos = 0;
 	int nsym_resolv = 0;
 	while(pos < act->len) {
 	    int lpos;
