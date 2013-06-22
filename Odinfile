@@ -4,7 +4,7 @@ glib.so == %glib-so
 
 %glib-doc ! == <<
   lua-glib.html
-  README.textile
+  README.rst
   ldoc.css
 
 %lua-ldoc == () +cmd='input=trim[['(lua-glib.c)']]' +cmdfile=(%mk-html) \
@@ -17,7 +17,7 @@ local l, lastl -- lastl is for lookahead
 lastl = ''
 io.input('lua-glib.html')
 for l in io.lines() do
-  -- change empy ul and ol to blockquote
+  -- change empty ul and ol to blockquote
   -- otherwise pandoc will just ignore them
   if lastl:find('<[ou]l>') and not l:find('<li>') then
     lastl = lastl:gsub('<[ou]l>', '<blockquote>') .. '\n' .. l
@@ -42,7 +42,7 @@ for l in io.lines() do
 end
 io.write(lastl .. '\n')
 
-#README.html == (README.rst) +cmd='rst2html.py' :stdout
+README.html == (README.rst) +cmd='rst2html.py' :stdout
 README.rst == (lua-glib.html) +cmdfile=(%mk-rst) :lua_stdout
 %mk-rst == <<
 -- io.input() must be specified because pipe.lua just reassigns that
@@ -58,8 +58,12 @@ for l in f:lines() do
 end
 lastl = ''
 for l in f:lines() do
-  -- remove nbsp
+  -- remove Unicode nbsp
   l = l:gsub(' ', ' ')
+  -- use ASCII '
+  l = l:gsub('’', '\'')
+  -- fix examples
+  l = l:gsub(':: example', '::')
   -- fix summary links (- headers)
   if l:find('^%-%-%-%-') then
     if lastl:sub(-2) == '_\n' then
@@ -98,55 +102,23 @@ for l in f:lines() do
   end
   -- fix class links, broken above
   lastl = lastl:gsub('(_?)`Class ', 'Class %1`')
+  -- fix excess _
+  lastl = lastl:gsub('([_)]%s+)_', '%1 ')
+  -- fix LDoc link
+  if l:find('__%*') then
+    l = l:gsub('%*$', '')
+    l = l:gsub(' `', '* `')
+  end
   -- fix ~ headers not on left margin (change to bold)
   if l:find('^ +~~') then
     l = ''
     lastl = lastl:gsub('^ +', '%0**'):sub(1,-2) .. '**'
   end
+  -----------------
   io.write(lastl)
   lastl = l .. '\n'
 end
 io.write(lastl)
-
-README.textile == (lua-glib.html) +cmdfile=(%mk-textile) :lua_stdout
-%mk-textile == <<
--- io.input() must be specified because pipe.lua just reassigns that
--- but does not actually reasign the program's stdin, or even io.stdin
-local f = glib.spawn{cmd="pandoc -f html -t textile", stdin=io.input()}
-local l
--- skip TOC; the table below serves just as well
-for l in f:lines() do
-  if l:find('^h1. Module ') then
-    io.write(l .. '\n')
-    break
-  end
-end
-for l in f:lines() do
-  -- remove lua-glib.html refs
-  l = l:gsub("lua%-glib.html", "")
-  -- remove nbsp
-  l = l:gsub(' ', ' ')
-  -- fix function links
-  if l:sub(1, 6) == '<dt> *' then
-    local ln = l:match('%*([^* ]*)[* ]')
-    l = l:sub(1, 5) .. '<a name="' .. ln .. '"/>' .. l:sub(7)
-  end
-  -- fix section links
-  if l:sub(1, 4) == 'h2. ' and l:sub(5, 5) ~= '"' then
-    local ln = l:sub(5):gsub(" ", "_")
-    l = l:sub(1, 4) .. '<a name="' .. ln .. '"/>' .. l:sub(5)
-  end
-  -- fix parens: impossible as far as I can tell.
-  -- brackets: total parse breakage and no link at all
---  l = l:gsub('("[^"]*%([^)]*%))(":#[a-z0-9_]*)', '[%1 %2]')
-  -- regular parens: invisible
---  l = l:gsub('%(', '&#28;'):gsub('%)', '&#29;')
-  -- wide parens: parse breakage, visible escapes, no link
---  l = l:gsub('%(', '&#FF08;'):gsub('%)', '&#FF09;')
-  -- at least fix (c)
-  l = l:gsub("%(c%)", "( c )")
-  io.write(l .. '\n')
-end
 
 %lua-script == <<
 -- there is no way in Odin to select this at build-time without clearing cache

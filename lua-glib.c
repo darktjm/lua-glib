@@ -108,13 +108,15 @@ linking with shared libraries.
 Note that since LDoc does not support error return sections, I have used
 exception sections (@raise) instead.
 
-For GitHub, I have converted this documentation to textile using pandoc
+For Bitbucket, I have converted this documentation to rst using pandoc
 and a bit of filtering.  See the Lua filtering code in Odinfile; this
-almost certainly needs Odin for best results.  I chose textile because
+almost certainly needs Odin for best results.  I chose rst because
 markdown doesn't do tables (at least not in a way that's compatible with
-anything pandoc can produce). and all the other formats produced plain
-ASCII on GitHub, in spite of claims to the contrary at
-https://www.github.com/github/markup/.
+anything pandoc can produce).  Originally, I used textile because github
+appears to display markup as ASCII if it takes too long to process, and
+only textile seemed to be fast enough.  However, textile output is broken
+on bitbucket and it seemed easier to just use the rst output I had already
+tweaked.
 
 Questions/comments to darktjm@gmail.com.
 
@@ -288,7 +290,7 @@ This is a wrapper for `g_log()`.
  to use `G_LOG_DOMAIN`.
 @tparam[opt] string level The log level.  Acceptable values are:
 
-  - 'crit/'critical'
+  - 'crit'/'critical'
   - 'debug'
   - 'err'/'error'
   - 'info'
