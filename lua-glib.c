@@ -91,7 +91,10 @@ Odinfile to build (and in fact requires itself to be present for
 odin-lua to work, so it needs to be compiled by hand the first time
 anyway).  It's just one C file, though, so it shouldn't be too hard
 to make a shared object out of it, linked to the glib and lua
-libraries.
+libraries.  For example, on amd64 Linux (may need to change -fPIC on
+other architectures):
+
+    gcc -O2 -fPIC `pkg-config glib-2.0 --cflags --libs` -llua -shared -o glib.so
 
 This documentation was built as follows (again, this is in the
 Odinfile):
