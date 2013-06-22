@@ -8,10 +8,11 @@ other various derivatives of GLib.
 Some features this library provides that other wrappers with similar
 scope don't are:
 
- * 132 functions, 10 variables, 6 custom datatypes, all
-   documented using LuaDoc.  Having the GLib docs on hand helps,
-   but is not strictly necessary.  Documentation is organized into
-   mostly the same sections as the GLib documentation.
+ * 132 functions, 10 variables, 6 custom datatypes (adding 99 more
+   functions as type methods), all documented using LuaDoc.  Having
+   the GLib docs on hand helps, but is not strictly necessary.
+   Documentation is organized into mostly the same sections as the
+   GLib documentation.
  * Streaming support where glib has it (e.g. conversion, checksums).
    This means that rather than requiring all input at once, it can
    be fed in piece-wise.  For example, see `_convert_`.
@@ -4490,7 +4491,7 @@ Set contents of a file to a string.
 This function is a wrapper for `g_file_set_contents()`.  Rather than
 write directly to a file, it writes to a temporary first and then moves
 the result into place.  In other words, it is *not* equivalent to
-`io.open(`*name*`):write(`*contents*`)`.
+`io.open(`*name*`, 'w'):write(`*contents*`)`.
 @function file_set
 @tparam string name Name of file to write
 @tparam string contents Contents to write
