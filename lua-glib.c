@@ -1,79 +1,99 @@
 /***
-This package wraps the GLib library fairly thinly.
-Unlike other lua-glib implementations, this is not meant to be a
-stepping stone for GTK+ support.  It is meant to be a portability
-and utility library.  There are other projects which provide
-support for GTK+ and other various derivatives of GLib.  The specific
-version against this was developed was 2.32.4; I have scanned the
-documentation for added symbols, and it should compile as far back as
-version 2.26 with a few minor missing features (search for "available with
-GLib" or "ignored with GLib").  The reason 2.26 was chosen is that it is
-the oldest version permitted with the GLIB_VERSION_MIN_REQUIRED macro,
-even though I could've gone as low as 2.18 without significant loss of
-functionality.
+This package wraps the GLib library fairly thinly.  Unlike other
+lua-glib implementations, this is not meant to be a stepping stone
+for GTK+ support.  It is meant to be a portability and utility
+library.  There are other projects which provide support for GTK+ and
+other various derivatives of GLib.
 
-This package was split off from my odin-lua project, so it uses
-an Odinfile to build (and in fact requires itself to be present for
-odin-lua to work, so it needs to be compiled by hand the first time
-anyway).  It's just one C file, though, so it shouldn't be too hard
-to make a shared object out of it, linked to the glib and lua libraries.
+Some features this library provides that other wrappers with similar
+scope don't are:
+
+ * 132 functions, 10 variables, 6 custom datatypes, all
+   documented using LuaDoc.  Having the GLib docs on hand helps,
+   but is not strictly necessary.  Documentation is organized into
+   mostly the same sections as the GLib documentation.
+ * Streaming support where glib has it (e.g. conversion, checksums).
+   This means that rather than requiring all input at once, it can
+   be fed in piece-wise.  For example, see `_convert_`.
+ * Improved process spawn support, including redirection to/from lua
+   "native" files and asynchronous lua readers and writers.  See
+   `spawn` and `process`.
+ * Global functions for gettext support (e.g. `_`())
+
+The specific version against which this was developed was 2.32.4; I
+have scanned the documentation for added symbols, and it should
+compile as far back as version 2.26 with a few minor missing features
+(search for "available with GLib" or "ignored with GLib").  The
+reason 2.26 was chosen is that it is the oldest version permitted
+with the GLIB_VERSION_MIN_REQUIRED macro, even though I could've gone
+as low as 2.18 without significant loss of functionality.
+
+The sections which are mostly supported are Version Information,
+Character Set Conversion (including streaming), Unicode Manipulation
+(skipping the low-level support functions and others which would
+really need low-level Lua Unicode support), Base64 Encoding
+(including streaming), Data Checksums (including streaming), Secure
+HMAC Digets (including streaming), Internationalization (including
+gettext macros, but excluding some of the low-level support
+functions), Miscellaneous Utility Functions (except for bit
+operations, which really need to be added to lua-bit, and a few other
+low-level/internal-use type functions), Timers, Spawning Processes
+(including some extra features), File Utilities (except a few MS
+library compatibility functions and memory mapped files), URI
+Functions, Hostname Utilities, Shell-related Utilities,
+Perl-compatible regular expressions, Simle XML Subset Parser (without
+vararg functions since building varargs generically is not possible),
+Key-value file parser, and Bookmark file parser.
+
+The only Standard Macros supported are the OS and path separator
+macros.  Date and Time Functions are mostly unsupported; the only one
+which could not be replaced by a native Lua time library is usleep,
+which is supported.  The GTimeZone and GDateTime sections are not
+supported for the same reason.
 
 No support is provided for Type Conversion Macros, Byte Order Macros,
 Numerical Definitions, or Miscellaneous Macros, as they are all
-either too low-level or C-specific.
-No support is provided for Atomic Operations, Threads, Thread Pools, or
-Asynchronous queues; use a Lua-specific threading module instead
-(such as Lanes).  No support is provided for The Main Event Loop, as
-its utility versus implementation effort seems low.  No support is
-provided for Dynamic Loading of Modules, because lua already does
-that.  No support is provided for Memory Allocation or Memory Slices,
-since you shouldn't be doing that in Lua.  IO Channels also seem
-below my minimum utility-to-effort ratio.  There is no direct support
-for the Error Reporting, Message Output, and Debugging Functions.
-There is no support for replacing the log handlers or setting the
-fatality flags in log messages, although that may come some day.
-The String Utility Functions are C-specific, and not supported.
-The Hook Functions seem useless for Lua.  The Lexical Scanner is
-not very configurable and hard to bind to Lua; use a made-for-Lua
-scanner instead like Lpeg.  No support is provided for the Commandline
-option parser, as adapting it to Lua would remove most of its convenience
-and there are plenty of other similar libraries for lua.  The Glob-style
-pattern matching is too simplistic and can easily be emulated using
-regex-style patterns.  The UNIX-specific and Windows-specific functions
-are not supported, since such blatantly non-portable functions should
-not be used.  The Testing framework is not supported, because a
-Lua-specific framework would be more suited to the task.  None of the
-GLib Data Types are supported, although there may be merit in eventually
+either too low-level or C-specific.  No support is provided for Atomic
+Operations, Threads, Thread Pools, or Asynchronous queues; use a
+Lua-specific threading module instead (such as Lanes).  No support is
+provided for The Main Event Loop, as its utility versus
+implementation effort seems low.  No support is provided for Dynamic
+Loading of Modules, because lua already does that.  No support is
+provided for Memory Allocation or Memory Slices, since you shouldn't
+be doing that in Lua.  IO Channels also seem below my minimum
+utility-to-effort ratio.  There is no direct support for the Error
+Reporting, Message Output, and Debugging Functions. There is no
+support for replacing the log handlers or setting the fatality flags
+in log messages, although that may come some day.  The String Utility
+Functions are C-specific, and not supported.  The Hook Functions seem
+useless for Lua.  The Lexical Scanner is not very configurable and
+hard to bind to Lua; use a made-for-Lua scanner instead like Lpeg.
+No support is provided for the Commandline option parser, as adapting
+it to Lua would remove most of its convenience and there are plenty
+of other similar libraries for lua.  The Glob-style pattern matching
+is too simplistic and can easily be emulated using regex-style
+patterns (for example, see glob.lua, which should be packaged with
+this).  The UNIX-specific and Windows-specific functions are not
+supported, since such blatantly non-portable functions should not be
+used.  The Testing framework is not supported, because a Lua-specific
+framework would be more suited to the task.  None of the GLib Data
+Types are supported, although there may be merit in eventually
 supporting the GVariant type somewhat.
 
-The only Standard Macros supported are the OS and path separator
-macros.  Date and Time Functions are mostly unsupported; the only
-one which could not be replaced by a native Lua time library is
-usleep, which is supported.  The GTimeZone and GDateTime sections
-are not supported for the same reason.
+Eventually, this may be split into multiple modules, so that uselses
+stuff can be removed.  However, removing useless stuff from GLib is
+not easy, so having Lua bindings for what's there is not necessarily
+harmful.
 
-The sections which are mostly supported are Version Information,
-Character Set Conversion (including streaming), Unicode
-Manipulation (skipping the low-level support functions and others
-which would really need low-level Lua Unicode support), Base64
-Encoding (including streaming), Data Checksums (including
-streaming), Secure HMAC Digets (including streaming),
-Internationalization (including gettext macros, but excluding some
-of the low-level support functions), Miscellaneous Utility
-Functions (except for bit operations, which really need to be added
-to lua-bit, and a few other low-level/internal-use type functions),
-Timers, Spawning Processes (including some extra features),
-File Utilities (except a few MS library compatibility functions and
-memory mapped files), URI Functions, Hostname Utilities, Shell-related
-Utilities, Perl-compatible regular expressions, Simle XML Subset Parser
-(without vararg functions since building varargs generically is not possible),
-Key-value file parser, and Bookmark file parser.
+This package was split off from my odin-lua project, so it uses an
+Odinfile to build (and in fact requires itself to be present for
+odin-lua to work, so it needs to be compiled by hand the first time
+anyway).  It's just one C file, though, so it shouldn't be too hard
+to make a shared object out of it, linked to the glib and lua
+libraries.
 
-Eventually, this may be split into multiple modules, so that uselses stuff
-can be removed.  However, removing useless stuff from GLib is not easy,
-so having Lua bindings for what's there is not necessarily harmful.
-
-This documentation was built as follows (again, this is in the Odinfile):
+This documentation was built as follows (again, this is in the
+Odinfile):
 
      ldoc.lua -p lua-glib -o lua-glib -d . -f discount -t 'Lua GLib Library' lua-glib.c
 
@@ -95,28 +115,28 @@ escape underscores in in-line references:
           else
 ~~~
 
-And [lua-discount](http://asbradbury.org/projects/lua-discount/), changed
-to use the system discount library:
+And [lua-discount](http://asbradbury.org/projects/lua-discount/),
+changed to use the system discount library:
 
     rm -f *.h
     make DISCOUNT_OBJS= LIBS=-lmarkdown
 
-The [discount](http://www.pell.portland.or.us/~orc/Code/discount/) version I
-used was 2.1.5a, with everything enabled, and compiled with -fPIC to enable
-linking with shared libraries.
+The [discount](http://www.pell.portland.or.us/~orc/Code/discount/)
+version I used was 2.1.5a, with everything enabled, and compiled with
+-fPIC to enable linking with shared libraries.
 
-Note that since LDoc does not support error return sections, I have used
-exception sections (@raise) instead.
+Note that since LDoc does not support error return sections, I have
+used exception sections (@raise) instead.
 
-For Bitbucket, I have converted this documentation to rst using pandoc
-and a bit of filtering.  See the Lua filtering code in Odinfile; this
-almost certainly needs Odin for best results.  I chose rst because
-markdown doesn't do tables (at least not in a way that's compatible with
-anything pandoc can produce).  Originally, I used textile because github
-appears to display markup as ASCII if it takes too long to process, and
-only textile seemed to be fast enough.  However, textile output is broken
-on bitbucket and it seemed easier to just use the rst output I had already
-tweaked.
+For Bitbucket, I have converted this documentation to rst using
+pandoc and a bit of filtering.  See the Lua filtering code in
+Odinfile; this almost certainly needs Odin for best results.  I chose
+rst because markdown doesn't do tables (at least not in a way that's
+compatible with anything pandoc can produce).  Originally, I used
+textile because github appears to display markup as ASCII if it takes
+too long to process, and only textile seemed to be fast enough.
+However, textile output is broken on bitbucket and it seemed easier
+to just use the rst output I had already tweaked.
 
 Questions/comments to darktjm@gmail.com.
 
@@ -4442,7 +4462,7 @@ File Utilities
 /***
 Return contents of a file as a string.
 This function is a wrapper for `g_file_get_contents()`.
-It is mostly equivalent to `io.open(*name*):read('\*a')`.
+It is mostly equivalent to `io.open(`*name*`):read('*a')`.
 @function file_get
 @tparam string name Name of file to read
 @treturn string|nil Contents of file, or nil if there was an error.
@@ -4466,10 +4486,11 @@ static int glib_file_get(lua_State *L)
 }
 
 /***
-Set contents of file to a string.
+Set contents of a file to a string.
 This function is a wrapper for `g_file_set_contents()`.  Rather than
 write directly to a file, it writes to a temporary first and then moves
-the result into place.
+the result into place.  In other words, it is *not* equivalent to
+`io.open(`*name*`):write(`*contents*`)`.
 @function file_set
 @tparam string name Name of file to write
 @tparam string contents Contents to write
