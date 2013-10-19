@@ -2533,7 +2533,7 @@ case normalization (for path elements which exist), and UNC format
 consolidation.
 Note that there are several unresolvable issues:  On Windows, there may
 be host names in the path, which are hard to resolve even with DNS.  Also,
-both Windows and UNIX might have a the same path mounted in two different
+both Windows and UNIX might have the same path mounted in two different
 places, and sometimes it's hard to tell that they are the same (and no extra
 effort is put into checking, either).
 @function path_canonicalize
