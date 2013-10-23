@@ -948,7 +948,7 @@ This is a wrapper for `g_unichar_get_mirror_char()`.
 @function get_mirror_char
 @tparam string|number c The Unicode character, as either an integer
  or a utf-8 string.
-@treturn nil|string|number `nil` if the character has no mirror; otherwise, the
+@treturn string|number|nil `nil` if the character has no mirror; otherwise, the
  mirror character.  The returned character is either an integer or a utf-8
  string, depending on the input.
 @raise Generates argument error if *c* is a string but not valid UTF-8.
@@ -4335,7 +4335,7 @@ Check if the process return code was an error.
 
 This is only available with GLib 2.34 or later.
 @function check_exit_status
-@treturn nil|string If the status returned by `process:status` should be
+@treturn string|nil If the status returned by `process:status` should be
 interpreted as an error, a human-readable error message is returned.
 If the process has not yet finished, or the return code is considered
 successful, `nil` is returned.
