@@ -3469,17 +3469,18 @@ p = glib.spawn {'cat', f}
 f_cont = p:wait()
 
 -- generic command line; parsed by glib rather than shell so relatively safe
-p = glib.spawn(cmd='cat /tmp/xyz')
+p = glib.spawn{cmd='cat /tmp/xyz'}
+-- or p = glib.spawn('cat /tmp/xyz')
 xyz_cont = p:wait()
 
 -- fully quoted arguments, but with renamed argv[0] if supported
-p = glib.spawn('concatenate', f, cmd='/bin/cat')
+p = glib.spawn{'concatenate', f, cmd='/bin/cat'}
 f_cont = p:wait()
 
 -- write output to a file
 -- more portable than tacking >file to the command
 of = open('/tmp/of', 'w')
-p = glib.spawn('cat', f, stdout=of)
+p = glib.spawn{'cat', f, stdout=of}
 p:wait()
 of:close()
 @see shell_parse_argv
@@ -4053,7 +4054,7 @@ static int read_pipe(lua_State *L, spawn_state *st, int whichout,
 Read data from a process' standard output.
 This function is a clone of the standard Lua `file:read` function.  It defers
 actual I/O to the `process:read_ready` routine, which in turn lets a background
-thread do all of the reading.  It will block until process:read_ready` is true,
+thread do all of the reading.  It will block until `process:read_ready` is true,
 and then read directly from the buffer read by the thread.
 @function process:read
 @see process:read_ready
@@ -6450,7 +6451,8 @@ static int regex_find(lua_State *L)
 
 /* concept of tfind taken from lrexlib */
 /***
-Search for a match in a string.
+Search for a match in a string.  Unlike `regex:find`, captures are returned
+in a table rather than as individual return values.
 @function regex:tfind
 @see string.find
 @tparam string s The string to search
