@@ -6313,7 +6313,7 @@ Get the number of characters in the longest lookbehind assertion in the
 pattern.
 
 This is only available with GLib 2.38 or later.
-@function regex:get_has_cr_or_lf
+@function regex:get_max_lookbehind
 @treturn number The number of characters in the longest lookbehind assertion.
 */
 static int regex_get_max_lookbehind(lua_State *L)

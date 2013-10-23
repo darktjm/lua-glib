@@ -1,5 +1,13 @@
 #!/usr/bin/env lua
 
+-- Note: This test is meant to be run/examined manually, and really
+-- only be run by me.  The best you can hope for on your own is to
+-- check that it doesn't crash.
+-- It is not meant to test if GLib works, but if the interface works, so
+-- you shouldn't need to test it against your own version of GLib.
+
+-- While it checks for GLib versions after 2.32, it assumes at least 2.32.
+
 if arg and #arg > 0 then
     pat = arg[1]
     if pat == 'help' or pat == '--help' or pat == '-h' or #arg > 1 then
@@ -31,6 +39,7 @@ glib = require 'glib'
 if head("Version Information") then
   print(glib.version)
 end
+gver = tonumber((string.gsub(glib.version, "%.[^.]*$", "")))
 
 if head("Standard Macros") then
   print(glib.os, glib.dir_separator, glib.searchpath_separator)
@@ -80,7 +89,9 @@ if head("Unicode Manipulation") then
   print(glib.type('a'), glib.type(0xd800))
   print(glib.break_type('a'), glib.break_type(0xd800))
   print(glib.get_mirror_char('('), glib.get_mirror_char(40))
-  print(glib.get_script('ç'))
+  if gver >= 2.30 then
+    print(glib.get_script('ç'))
+  end
   print(glib.utf8_sub(ss, 2, 5), glib.utf8_len(ss), glib.utf8_validate(ss))
   print(glib.utf8_validate(s))
   print(glib.utf8_strup(ss), glib.utf8_strdown(ss), glib.utf8_casefold(ss))
@@ -130,7 +141,7 @@ if head("Data Checksums") then
   print(f())
 end
 
-if head("Secure HMAC Digests") then
+if gver >= 2.30 and head("Secure HMAC Digests") then
   key = 'hello'
   print(glib.md5hmac(key, ss), glib.sha1hmac(key, ss), glib.sha256hmac(key, ss))
   print(#glib.sha256hmac(key, ss, true))
@@ -147,8 +158,10 @@ if head("Internationalization") then
   -- To test this properly, a translation file should be used
   print(_("hello"), Q_("blah|hello"), C_("blah", "hello"))
   print(N_("hello"), NC_("blah", "hello"))
-  for i, v in ipairs(glib.get_locale_variants()) do
-    print(i, v)
+  if gver >= 2.28 then
+    for i, v in ipairs(glib.get_locale_variants()) do
+      print(i, v)
+    end
   end
   for i, v in ipairs(glib.get_locale_variants("en_US.utf8")) do
     print(i, v)
@@ -306,14 +319,16 @@ if head("Miscellaneous Utility Functions") then
   print(root, table.concat(path, '|'))
   root, path = split_file("hello//there")
   print(root, table.concat(path, '|'))
-  function pr_sizes(s)
-    print(glib.format_size(s), glib.format_size(s, true),
-          glib.format_size(s, false, true), glib.format_size(s, true, true))
+  if gver >= 2.30 then
+    function pr_sizes(s)
+      print(glib.format_size(s), glib.format_size(s, true),
+            glib.format_size(s, false, true), glib.format_size(s, true, true))
+    end
+    pr_sizes(1e6)
+    pr_sizes(1024*1024)
+    pr_sizes(2^48)
+    pr_sizes(2^60)
   end
-  pr_sizes(1e6)
-  pr_sizes(1024*1024)
-  pr_sizes(2^48)
-  pr_sizes(2^60)
   print(glib.find_program_in_path("more"))
   print(glib.find_program_in_path("qzmore"))
   a = {}
@@ -352,11 +367,20 @@ if head("Spawning Processes") then
   if not p then print(msg) end
   print(p:io_wait(true, true, true))
   print(p:status())
+  if gver >= 2.34 then print(p:check_exit_status()) end
   r, o = p:wait()
   print(#o)
   print(p:io_wait(true, true, true))
   print(p:status())
+  if gver >= 2.34 then print(p:check_exit_status()) end
   p = nil
+  if gver >= 2.34 then
+      p, msg = glib.spawn('false')
+      if not p then print(msg) end
+      p:wait()
+      print(p:check_exit_status())
+      p = nil
+  end
   p, msg = glib.spawn{'cat', '/etc/timezone'}
   if not p then print(msg) end
   print(p:wait())
@@ -460,22 +484,25 @@ if head("File Utilities") then
   print(glib.mkdir_with_parents('/x'))
   print(glib.mkdir_with_parents('xx/yy/zz'))
   um = glib.umask(0)
-  print(um, glib.mkdtemp('/xx/XXXXXX'), glib.mkdtemp('xx/XXXXXX', 'og-rx,+w'))
-  glib.umask(um)
-  for e in glib.dir('xx') do
+  if gver >= 2.30 then
+    print(um, glib.mkdtemp('/xx/XXXXXX'), glib.mkdtemp('xx/XXXXXX', 'og-rx,+w'))
+    glib.umask(um)
+    for e in glib.dir('xx') do
       io.write(e .. ' ')
       for k, v in pairs(glib.stat(glib.build_filename('xx', e))) do
 	  io.write(k .. '=' .. v .. ' ')
       end
       io.write('\n')
+    end
+    io.write('\n')
+    print(glib.dir_make_tmp('/XXXXXX'))
+    print(glib.dir_make_tmp('xxxxx'))
+    d = glib.dir_make_tmp()
+    print(d)
+    print(glib.remove(d))
   end
-  io.write('\n')
-  print(glib.dir_make_tmp('/XXXXXX'))
-  print(glib.dir_make_tmp('xxxxx'))
-  d = glib.dir_make_tmp()
-  print(d)
-  print(glib.remove(d))
   print(glib.remove('/bin'))
+  -- this test will not work as intended with glib < 2.30
   print(glib.remove('xx'))
   print(glib.mkdir(glib.build_filename('xx', 'zz')))
   
@@ -592,12 +619,16 @@ if head('Perl-compatible Regular Expressions') then
 		       {'.*'},
 		       {'^'},
 		       {'$'},
+		       {'\n'},
+		       {'(?<!ab)C'},
 		       } do
     rx, msg = glib.regex_new(unpack(rv))
     if not rx then
       print(rv[1], msg)
     else
       print(rx:get_pattern(), rx:get_max_backref(), rx:get_capture_count(), rx:get_string_number('hello'))
+      if gver >= 2.34 then print(rx:get_has_cr_or_lf()) end
+      if gver >= 2.38 then print(rx:get_max_lookbehind()) end
       for i, v in ipairs(rx:get_compile_flags()) do
 	print(i, v)
       end
