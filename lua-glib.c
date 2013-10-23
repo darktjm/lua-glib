@@ -27,7 +27,9 @@ compile as far back as version 2.26 with a few minor missing features
 (search for "available with GLib" or "ignored with GLib").  The
 reason 2.26 was chosen is that it is the oldest version permitted
 with the GLIB_VERSION_MIN_REQUIRED macro, even though I could've gone
-as low as 2.18 without significant loss of functionality.
+as low as 2.18 without significant loss of functionality.  I have
+also in the mean time added a few bits from 2.36 and 2.38, although
+I've only tested up to 2.36.4.
 
 The sections which are mostly supported are Version Information,
 Character Set Conversion (including streaming), Unicode Manipulation
@@ -3885,14 +3887,19 @@ static int read_ready(lua_State *L, spawn_state *st, int whichout)
 }
 
 /***
-Wait for input to be available from process standard output.
-This function is to support non-blocking input from the process.  It
-takes the same parameters as read, and returns true if that read would
-succeed without blocking.  It accomplishes this by attempting the requested
-read in a background thread, and returning success when the data has actually
-been read.  Due to buffer sizes used and other issues, the reader thread
-might hang waiting for input even when enough data is available, depending
-on operating system.  On Linux, at least, it should never hang.
+Check if input is available from process standard output.
+This function is used to support non-blocking input from the process.  It
+takes the same parameters as `process:read`, and returns true if that read
+would succeed without blocking.  Otherwise, it returns false (immediately).
+It accomplishes this by attempting the requested read in a background thread,
+and returning success when the data has actually been read.  Due to buffer
+sizes used and other issues, the reader thread might hang waiting for input
+even when enough data is available, depending on operating system.  On Linux,
+at least, it should never hang.  Note that it is not necessary to use the
+same arguments for a subsequent `process:read`.  For example, the entire
+file can be pre-read using `read_ready('*a')`, followed by reading one
+line at a time.  Attempting to read more than a prior `read_ready` may
+cause the system to wait for further input.
 @function process:read_ready
 @see process:read
 @tparam string|number ... See `process:read` for details.  For the '*n'
@@ -3913,7 +3920,7 @@ static int out_ready(lua_State *L)
 }
 
 /***
-Wait for input to be available from process standard error.
+Check if input is available from process standard error.
 See the documentation for `process:read_ready` for details.
 @function process:read_err_ready
 @see process:read_ready
@@ -4055,7 +4062,7 @@ Read data from a process' standard output.
 This function is a clone of the standard Lua `file:read` function.  It defers
 actual I/O to the `process:read_ready` routine, which in turn lets a background
 thread do all of the reading.  It will block until `process:read_ready` is true,
-and then read directly from the buffer read by the thread.
+and then read directly from the buffer filled by the thread.
 @function process:read
 @see process:read_ready
 @tparam string|number ... If no parameters are given, read a single
@@ -4322,6 +4329,38 @@ static int proc_status(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 34, 0)
+/***
+Check if the process return code was an error.
+
+This is only available with GLib 2.34 or later.
+@function check_exit_status
+@treturn nil|string If the status returned by `process:status` should be
+interpreted as an error, a human-readable error message is returned.
+If the process has not yet finished, or the return code is considered
+successful, `nil` is returned.
+*/
+static int proc_check_exit_status(lua_State *L)
+{
+    get_udata(L, 1, st, spawn_state);
+    g_main_context_iteration(st->mctx, FALSE);
+    g_mutex_lock(&st->lock);
+    if(st->pid)
+	lua_pushnil(L);
+    else {
+	GError *err = NULL;
+	if(g_spawn_check_exit_status(st->status, &err))
+	    lua_pushnil(L);
+	else {
+	    lua_pushstring(L, err->message);
+	    g_error_free(err);
+	}
+    }
+    g_mutex_unlock(&st->lock);
+    return 1;
+}
+#endif
+
 static void ready_all(lua_State *L, spawn_state *st, int whichout)
 {
     struct outinfo_t *oi = &st->outinfo[whichout];
@@ -4350,7 +4389,7 @@ Wait for process termination and clean up.
 This function starts background reads for all data on the standard output
 and standard error channels, and flushes and closes the standard input
 channel.  It then waits for the process to finish.  Once finished, the
-result code from the process and any gathered standard input and standard
+result code from the process and any gathered standard output and standard
 error are returned.
 @function process:wait
 @treturn number Result code from the process
@@ -4453,6 +4492,9 @@ static luaL_Reg spawn_state_funcs[] = {
     {"io_wait", proc_iowait},
     {"pid", proc_pid},
     {"status", proc_status},
+#if GLIB_CHECK_VERSION(2, 34, 0)
+    {"check_exit_status", proc_check_exit_status},
+#endif
     {"wait", proc_finish},
     {"__gc", free_spawn_state},
     {NULL, NULL}
@@ -4588,6 +4630,7 @@ links return false, even though they actually exist.
 */
 file_test(EXISTS, exists)
 
+/* Lua 5.1/5.2 "native" file descriptors */
 static int fileclose(lua_State *L)
 {
 #if LUA_VERSION_NUM <= 501
@@ -4625,6 +4668,7 @@ static FILE **mkfile(lua_State *L)
     return ret;
 }
 
+/* chmod-style or ls-style permissions */
 static int getmode(lua_State *L, int arg, int def, int isdir)
 {
     if(lua_isnumber(L, arg))
@@ -4795,7 +4839,7 @@ static int glib_umask(lua_State *L)
 /***
 Create a unique temporary file from a pattern.
 This function is a wrapper for `g_mkstemp()`.  It creates a new, unique
-file by replacing the X characters in a template with six consecutive X
+file by replacing the X characters in a template containing six consecutive X
 characters.
 @function mkstemp
 @tparam string tmpl The template.
@@ -4849,7 +4893,7 @@ static int glib_mkstemp(lua_State *L)
 /***
 Create a unique temporary file in the standard temporary directory.
 This function is a wrapper for `g_file_open_tmp()`.  It creates a new,
-unique file by replacing the X characters in a template with six consecutive
+unique file by replacing the X characters in a template containing six consecutive
 X characters.  The template may contain no directory separators.
 @function open_tmp
 @tparam[opt] string tmpl The template.  If unspecified, a default
@@ -6247,6 +6291,39 @@ static int regex_get_max_backref(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 34, 0)
+/***
+Check if pattern contains explicit CR or LF references.
+
+This is only available with GLib 2.34 or later.
+@function regex:get_has_cr_or_lf
+@treturn boolean true if the pattern contains explicit CR or LF references.
+*/
+static int regex_get_has_cr_or_lf(lua_State *L)
+{
+    get_udata(L, 1, st, regex_state);
+    lua_pushboolean(L, g_regex_get_has_cr_or_lf(st->rex));
+    return 1;
+}
+#endif
+
+#if GLIB_CHECK_VERSION(2, 38, 0)
+/***
+Get the number of characters in the longest lookbehind assertion in the
+pattern.
+
+This is only available with GLib 2.38 or later.
+@function regex:get_has_cr_or_lf
+@treturn number The number of characters in the longest lookbehind assertion.
+*/
+static int regex_get_max_lookbehind(lua_State *L)
+{
+    get_udate(L, 1, st, regex_state);
+    lua_pushnumber(L, g_regex_get_max_lookbehind(st->rex));
+    return 1;
+}
+#endif
+
 /***
 Get the number of capturing subpatterns in the pattern.
 @function regex:get_capture_count
@@ -6307,13 +6384,13 @@ static int regex_get_match_flags(lua_State *L)
     int nfl, i;
     get_udata(L, 1, st, regex_state);
     mf = g_regex_get_match_flags(st->rex);
-    for(i = nfl = 0; i < NUM_COMP_FLAGS; i++)
+    for(i = nfl = 0; i < NUM_EXEC_FLAGS; i++)
 	if(exec_flags[i].flag > 0 && (exec_flags[i].flag & mf))
 	    ++nfl;
     if(st->do_all)
 	++nfl;
     lua_createtable(L, nfl, 0);
-    for(i = nfl = 0; i < NUM_COMP_FLAGS; i++)
+    for(i = nfl = 0; i < NUM_EXEC_FLAGS; i++)
 	if(exec_flags[i].flag > 0 && (exec_flags[i].flag & mf)) {
 	    ++nfl;
 	    lua_pushstring(L, exec_flags[i].name);
@@ -7189,6 +7266,12 @@ static int regex_gsub(lua_State *L)
 static luaL_Reg regex_state_funcs[] = {
     { "get_pattern", regex_get_pattern },
     { "get_max_backref", regex_get_max_backref },
+#if GLIB_CHECK_VERSION(2, 34, 0)
+    { "get_has_cr_or_lf", regex_get_has_cr_or_lf },
+#endif
+#if GLIB_CHECK_VERSION(2, 38, 0)
+    { "get_max_lookbehind", regex_get_max_lookbehind },
+#endif
     { "get_capture_count", regex_get_capture_count },
     { "get_string_number", regex_get_string_number },
     { "get_compile_flags", regex_get_compile_flags },
