@@ -213,7 +213,7 @@ static int win_umask(int m)
 
 /* 5.1/5.2 compatibility */
 #if LUA_VERSION_NUM <= 501
-#define lua_len lua_objlen
+#define lua_rawlen lua_objlen
 #define luaL_setfuncs(L, f, n) luaL_register(L, NULL, f)
 #define lua_setuservalue(L, n) lua_setfenv(L, n)
 #define lua_getuservalue(L, n) lua_getfenv(L, n)
@@ -2058,7 +2058,7 @@ static int glib_rand_new(lua_State *L)
     else if(lua_isnumber(L, 1))
 	st->state = g_rand_new_with_seed(lua_tonumber(L, 1));
     else if(lua_istable(L, 1)) {
-	size_t len = lua_len(L, 1);
+	size_t len = lua_rawlen(L, 1);
 	guint32 *arr = g_malloc(len * sizeof(guint32));
 	int i;
 	for(i = 0; i < len; i++) {
@@ -2406,7 +2406,7 @@ static gchar **build_varargs(lua_State *L, int skip)
 
     ++skip; /* instead of 1 + skip everywhere */
     if(narg == 1 && lua_istable(L, skip)) {
-	size_t len = lua_len(L, skip);
+	size_t len = lua_rawlen(L, skip);
 	luaL_checkstack(L, len, "unpacking table");
 	args = g_malloc((len + 1) * sizeof(args));
 	for(i = 0; i < len; i++) {
@@ -2978,7 +2978,7 @@ static int glib_qsort(lua_State *L)
     if(lua_gettop(L) > 1)
 	luaL_checktype(L, 2, LUA_TFUNCTION);
     /* sort an array of indices instead of Lua array directly */
-    nind = lua_len(L, 1);
+    nind = lua_rawlen(L, 1);
     ind = g_malloc(nind * sizeof(*ind) * 2);
     for(i = 0; i < nind; i++)
 	ind[i] = i + 1;
@@ -3500,7 +3500,7 @@ static int glib_spawn(lua_State *L)
     st->infd = st->outinfo[0].fd = st->outinfo[1].fd = -1;
     inf = outf = errf = NULL;
     if(lua_istable(L, 1)) {
-	nargs = lua_len(L, 1);
+	nargs = lua_rawlen(L, 1);
 	lua_getfield(L, 1, "path");
 	if(!lua_isnil(L, -1))
 	    use_path = lua_toboolean(L, -1);
@@ -5238,7 +5238,7 @@ static int glib_stat(lua_State *L)
 
     if(lua_istable(L, 2)) {
 	int i;
-	nret = lua_len(L, 2);
+	nret = lua_rawlen(L, 2);
 	pstart = lua_gettop(L) + 1;
 	lua_checkstack(L, nret);
 	for(i = 1; i <= nret; i++) {
@@ -6050,7 +6050,7 @@ static gboolean get_mfl(lua_State *L, int index, GRegexMatchFlags *mfl,
     if(!lua_isnoneornil(L, index)) {
 	int i;
 	luaL_checktype(L, index, LUA_TTABLE);
-	for(i = lua_len(L, index); i > 0; --i) {
+	for(i = lua_rawlen(L, index); i > 0; --i) {
 	    const char *s;
 	    rex_flag *rf;
 	    lua_pushinteger(L, i);
@@ -6137,7 +6137,7 @@ static int glib_regex_new(lua_State *L)
     if(stop > 1 && !lua_isnoneornil(L, 2)) {
 	int i;
 	luaL_checktype(L, 2, LUA_TTABLE);
-	for(i = lua_len(L, 2); i > 0; --i) {
+	for(i = lua_rawlen(L, 2); i > 0; --i) {
 	    const char *s;
 	    rex_flag *rf;
 	    lua_pushinteger(L, i);
@@ -7816,7 +7816,7 @@ static int key_file_load_from_file(lua_State *L)
     get_udata(L, 1, st, key_file_state);
 
     if(lua_istable(L, 3)) {
-	int len = lua_len(L, 3);
+	int len = lua_rawlen(L, 3);
 	search_path = g_malloc((len + 1) * sizeof(*search_path));
 	search_path[len] = NULL;
 	while(len > 0) {
@@ -8340,7 +8340,7 @@ static int key_file_set_list(lua_State *L)
     const char *locale = lua_isstring(L, 5) ? lua_tostring(L, 5) : NULL;
     get_udata(L, 1, st, key_file_state);
     luaL_checktype(L, 4, LUA_TTABLE);
-    len = lua_len(L, 4);
+    len = lua_rawlen(L, 4);
     strs = g_malloc((len + 1) * sizeof(*strs));
     strs[len] = NULL;
     for(i = 0; i < len; i++) {
@@ -8372,7 +8372,7 @@ static int key_file_set_boolean_list(lua_State *L)
     gboolean *bools;
     get_udata(L, 1, st, key_file_state);
     luaL_checktype(L, 4, LUA_TTABLE);
-    len = lua_len(L, 4);
+    len = lua_rawlen(L, 4);
     bools = g_malloc(len * sizeof(*bools));
     for(i = 0; i < len; i++) {
 	lua_pushinteger(L, i + 1);
@@ -8399,7 +8399,7 @@ static int key_file_set_number_list(lua_State *L)
     gdouble *vals;
     get_udata(L, 1, st, key_file_state);
     luaL_checktype(L, 4, LUA_TTABLE);
-    len = lua_len(L, 4);
+    len = lua_rawlen(L, 4);
     vals = g_malloc(len * sizeof(*vals));
     for(i = 0; i < len; i++) {
 	lua_pushinteger(L, i + 1);
@@ -9165,7 +9165,7 @@ static int bookmark_file_set_groups(lua_State *L)
     const char *uri = luaL_checkstring(L, 2);
     get_udata(L, 1, st, bookmark_file_state);
     luaL_checktype(L, 3, LUA_TTABLE);
-    len = lua_len(L, 3);
+    len = lua_rawlen(L, 3);
     gr = g_malloc(len * sizeof(*gr));
     while(len > 0) {
 	lua_pushinteger(L, len);
