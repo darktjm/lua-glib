@@ -8,7 +8,7 @@ other various derivatives of GLib.
 Some features this library provides that other wrappers with similar
 scope don't are:
 
- * 132 functions, 10 variables, 6 custom datatypes (adding 99 more
+ * 132 functions, 10 variables, 6 custom datatypes (adding 102 more
    functions as type methods), all documented using LuaDoc.  Having
    the GLib docs on hand helps, but is not strictly necessary.
    Documentation is organized into mostly the same sections as the
@@ -36,7 +36,7 @@ Character Set Conversion (including streaming), Unicode Manipulation
 (skipping the low-level support functions and others which would
 really need low-level Lua Unicode support), Base64 Encoding
 (including streaming), Data Checksums (including streaming), Secure
-HMAC Digets (including streaming), Internationalization (including
+HMAC Digests (including streaming), Internationalization (including
 gettext macros, but excluding some of the low-level support
 functions), Miscellaneous Utility Functions (except for bit
 operations, which really need to be added to lua-bit, and a few other
@@ -6318,7 +6318,7 @@ This is only available with GLib 2.38 or later.
 */
 static int regex_get_max_lookbehind(lua_State *L)
 {
-    get_udate(L, 1, st, regex_state);
+    get_udata(L, 1, st, regex_state);
     lua_pushnumber(L, g_regex_get_max_lookbehind(st->rex));
     return 1;
 }
