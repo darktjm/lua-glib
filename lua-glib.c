@@ -1791,6 +1791,8 @@ command can be used (may require recent gettext to support -k:g and lua):
 
     xgettext -L lua -kQ_:1g -kC_:1c,2 -kNC_:1c,2 -kN_ -kglib.ngettext:1,2 \
              -ofile.po file.lua
+
+to produce `file.po` from `file.lua`.
 @section Internationalization
 */
 
