@@ -1,0 +1,45 @@
+# test messages for glib-test.lua
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: glib-test 1.0\n"
+"Report-Msgid-Bugs-To: darktjm@gmail.com\n"
+"POT-Creation-Date: 2013-11-04 20:33-0600\n"
+"PO-Revision-Date: 2013-11-04 20:33-0600\n"
+"Last-Translator: Thomas J. Moore <darktjm@gmail.com>\n"
+"Language-Team: N/A\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=n % 3;\n"
+
+#: glib-test.lua:166
+msgid "hello"
+msgstr "hi"
+
+#: glib-test.lua:166
+msgctxt "blah"
+msgid "hello"
+msgstr "hi there"
+
+#: glib-test.lua:166
+msgctxt "blah2"
+msgid "hello"
+msgstr "greetings"
+
+#: glib-test.lua:167
+msgid "hello2"
+msgstr "yo"
+
+#: glib-test.lua:168
+msgctxt "blah"
+msgid "hello2"
+msgstr "hey"
+
+#: glib-test.lua:172
+msgid "single"
+msgid_plural "plural"
+msgstr[0] "zero"
+msgstr[1] "one"
+msgstr[2] "two"

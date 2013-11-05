@@ -155,9 +155,23 @@ if gver >= 2.30 and head("Secure HMAC Digests") then
 end
 
 if head("Internationalization") then
+  locale = os.setlocale("")
+  print(locale)
+  glib.link(".", locale, true)
+  glib.link(".", "LC_MESSAGES", true)
+  print(glib.textdomain())
+  print(glib.textdomain("glib-test", glib.get_current_dir()))
+  print(glib.textdomain("glib"))
+  print(glib.textdomain("glib-test"))
   -- To test this properly, a translation file should be used
-  print(_("hello"), Q_("blah|hello"), C_("blah", "hello"))
-  print(N_("hello"), NC_("blah", "hello"))
+  print(_("hello"), Q_("blah|hello"), C_("blah2", "hello"))
+  n = N_("hello2")
+  nc = { NC_("blah", "hello2") }
+  print(n, nc[1], nc[2])
+  print(_(n), C_(nc[2], nc[1]))
+  for i, v in ipairs{1, 2, 0, 5} do
+      print(v, glib.ngettext("single", "plural", v))
+  end
   if gver >= 2.28 then
     for i, v in ipairs(glib.get_locale_variants()) do
       print(i, v)

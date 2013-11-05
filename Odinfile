@@ -1,5 +1,7 @@
 glib.so == %glib-so
 
+glib-test.mo == () +cmd=msgfmt -c (glib-test.po) -o glib-test.mo :output/glib-test.mo
+
 %glib-so == lua-glib.c +cc_flags=-fPIC -Werror +(%glib) +(%lua) +ld_flags=-shared +debug :exe
 
 %glib-doc ! == <<

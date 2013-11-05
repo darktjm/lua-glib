@@ -1779,9 +1779,71 @@ static int glib_sha256hmac(lua_State *L)
 
 /*********************************************************************/
 /***
-Internationalization
+Internationalization.
+Note that in general, you will need to use `os.setlocale` and
+`textdomain` to initialize this.  For example, for the application
+myapp, with locale files under the current directory:
+
+    os.setlocale("")
+    glib.textdomain("myapp", glib.get_current_dir())
+To extract messages from Lua files using these functions, the following
+command can be used (may require recent gettext to support -k:g and lua):
+
+    xgettext -L lua -kQ_:1g -kC_:1c,2 -kNC_:1c,2 -kN_ -kglib.ngettext:1,2 \
+             -ofile.po file.lua
 @section Internationalization
 */
+
+/***
+Set or query text message database location.
+Before this function is called, a default message database is used.
+This sets or queries the domain (also known as package or application)
+name, and optionally sets or queries the domain's physical file system
+location.  It may also be used to set the encoding of output messages
+if not the default for the locale.  Note that none of the exported
+translation functions take a domain name parameter, so this function
+may need to be called before every translation from a different domain.
+@function textdomain
+@tparam[opt] string|nil domain The domain to use for subsequent translation
+calls.  If `nil` or missing, no change is made.
+@tparam[optchain] string|nil path The path to message files, if not the
+system default.  If `nil` or missing, no change is made.
+@tparam[optchain] string|nil encoding The encoding of translation output.
+If `nil` or missing, no change is made.
+@treturn string The current (new if set) domain for future translations.
+@treturn string The path to the translation strings for the current
+domain.
+@treturn string The encoding used for output messages.  If `nil`, the
+locale's default is used.
+*/
+/* technically, this is a GNU gettext function, but glib always includes it */
+#if 0 /* POSIX only */
+#include <langinfo.h>
+#endif
+static int glib_textdomain(lua_State *L)
+{
+    const char *d = NULL, *ds, *dir = NULL, *enc = NULL;
+    if(!lua_isnoneornil(L, 1))
+	d = luaL_checkstring(L, 1);
+    if(!(ds = d))
+	d = textdomain(NULL);
+    if(!lua_isnoneornil(L, 2))
+	dir = luaL_checkstring(L, 2);
+    if(!lua_isnoneornil(L, 3))
+	enc = luaL_checkstring(L, 3);
+    dir = bindtextdomain(d, dir);
+    enc = bind_textdomain_codeset(d, enc);
+#if 0 /* POSIX only */
+    if(!enc)
+	enc = nl_langinfo(CODESET);
+#endif
+    if(ds)
+	textdomain(ds);
+    lua_pushstring(L, d);
+    lua_pushstring(L, dir);
+    lua_pushstring(L, enc);
+    return 3;
+}
 
 /***
 Replace text with its translation.
@@ -1846,7 +1908,7 @@ This is a wrapper for `N_()`.  It resides in the global symbol table
 @tparam string s The text to translate
 @treturn string *s*
 */
-static int glib_ngettext(lua_State *L)
+static int glib_nogettext(lua_State *L)
 {
     luaL_checkstring(L, 1);
     return 1;
@@ -1860,11 +1922,31 @@ This is a wrapper for `NC_()`.  It resides in the global symbol table
 @tparam string c The context
 @tparam string s The text to translate.
 @treturn string *s*
+@treturn string *c*
 */
 static int glib_ndpgettext4(lua_State *L)
 {
     luaL_checkstring(L, 1);
     luaL_checkstring(L, 2);
+    lua_insert(L, 1);
+    return 2;
+}
+
+/***
+Replace text with its number-appropriate translation.
+This is a wrapper for `g_dngettext()`.
+@function ngettext
+@tparam string singular The text to translate if *n* is 1
+@tparam string plural The text to translate if *n* is not 1
+@tparam number n The number of items being translated
+@treturn string The translated text, or *singular* if there is no translation
+and *n* is 1, or *plural* if there is no translation and *n* is not 1.
+*/
+static int glib_ngettext(lua_State *L)
+{
+    lua_pushstring(L, g_dngettext(NULL, luaL_checkstring(L, 1),
+				  luaL_checkstring(L, 2),
+				  luaL_checknumber(L, 3)));
     return 1;
 }
 
@@ -9540,8 +9622,11 @@ static luaL_Reg lua_funcs[] = {
     fent(sha256hmac),
 #endif
     /* Internationalization */
+    /* technically GNU gettext, not glib */
+    fent(textdomain),
     /* macros are in global */
-    /* local helper functions are not supported */
+    /* local helper functions are not supported, except for: */
+    fent(ngettext),
 #if GLIB_CHECK_VERSION(2, 28, 0)
     fent(get_locale_variants),
 #endif
@@ -9809,7 +9894,7 @@ int luaopen_glib(lua_State *L)
     lua_register(L, "_", glib_gettext);
     lua_register(L, "Q_", glib_dpgettext0);
     lua_register(L, "C_", glib_dpgettext4);
-    lua_register(L, "N_", glib_ngettext);
+    lua_register(L, "N_", glib_nogettext);
     lua_register(L, "NC_", glib_ndpgettext4);
 
 #if LUA_VERSION_NUM <= 501
