@@ -854,10 +854,14 @@ if head('Key-value file parser') then
   glib.remove('xx')
   kf3 = glib.key_file_new()
   kf3:load_from_data(kf:to_data(), true, true)
-  kf:save_to_file('xx')
-  kf4 = glib.key_file_new()
-  kf4:load_from_file('xx', false, true, true)
-  glib.remove('xx')
+  if gver >= 2.30 then
+    kf:save_to_file('xx')
+    kf4 = glib.key_file_new()
+    kf4:load_from_file('xx', false, true, true)
+    glib.remove('xx')
+  else
+    kf4 = kf3
+  end
   -- comment after create has blank line after it in kf, but not kf2-kf4
   print(kf2:to_data() == kf3:to_data(), kf:to_data() == kf3:to_data(),
         kf4:to_data() == kf3:to_data())
