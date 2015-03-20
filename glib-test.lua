@@ -854,7 +854,13 @@ if head('Key-value file parser') then
   glib.remove('xx')
   kf3 = glib.key_file_new()
   kf3:load_from_data(kf:to_data(), true, true)
-  print(kf2:to_data() == kf3:to_data(), kf:to_data() == kf3:to_data())
+  kf:save_to_file('xx')
+  kf4 = glib.key_file_new()
+  kf4:load_from_file('xx', false, true, true)
+  glib.remove('xx')
+  -- comment after create has blank line after it in kf, but not kf2-kf4
+  print(kf2:to_data() == kf3:to_data(), kf:to_data() == kf3:to_data(),
+        kf4:to_data() == kf3:to_data())
   print(kf2:get('Group 1', 'Key 1') == 'A test string')
   print(kf2:get('Group 1', 'Key 1', 'nlnd') == 'A test string in nlnd')
   print(kf2:get('Group 1', 'Key 1', 'zzz') == 'A test string')

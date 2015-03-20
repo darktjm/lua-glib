@@ -8,7 +8,7 @@ other various derivatives of GLib.
 Some features this library provides that other wrappers with similar
 scope don't are:
 
- * 132 functions, 10 variables, 6 custom datatypes (adding 102 more
+ * 132 functions, 10 variables, 6 custom datatypes (adding 103 more
    functions as type methods), all documented using LuaDoc.  Having
    the GLib docs on hand helps, but is not strictly necessary.
    Documentation is organized into mostly the same sections as the
@@ -28,8 +28,7 @@ compile as far back as version 2.26 with a few minor missing features
 reason 2.26 was chosen is that it is the oldest version permitted
 with the GLIB_VERSION_MIN_REQUIRED macro, even though I could've gone
 as low as 2.18 without significant loss of functionality.  I have
-also in the mean time added a few bits from 2.36 and 2.38, although
-I've only tested up to 2.36.4.
+also in the mean time added a few bits from versions up to 2.42.2.
 
 The sections which are mostly supported are Version Information,
 Character Set Conversion (including streaming), Unicode Manipulation
@@ -4626,7 +4625,7 @@ the result into place.  In other words, it is *not* equivalent to
 @tparam string name Name of file to write
 @tparam string contents Contents to write
 @treturn boolean True if successful
-@treturn string Error message if unsuccessful
+@raise Returns false and error message string on error.
 */
 static int glib_file_set(lua_State *L)
 {
@@ -8077,6 +8076,32 @@ static int key_file_to_data(lua_State *L)
     return 1;
 }
 
+#if GLIB_CHECK_VERSION(2, 40, 0)
+/***
+Writes out contents of key file.  Uses same mechanism as `file_set`.
+
+This is only available with GLib 2.40 or later.
+@function key_file:save_to_file
+@tparam string name File name
+@treturn boolean True if successful
+@raise Returns false and error message string on error.
+*/
+static int key_file_save_to_file(lua_State *L)
+{
+    get_udata(L, 1, st, key_file_state);
+    const char *f = luaL_checkstring(L, 2);
+    GError *err = NULL;
+    gboolean ok = g_key_file_save_to_file(st->kf, f, &err);
+    lua_pushboolean(L, ok);
+    if(!ok) {
+	lua_pushstring(L, err->message);
+	g_error_free(err);
+	return 2;
+    }
+    return 1;
+}
+#endif
+
 /***
 Get the start group of the key file.
 @function key_file:get_start_group
@@ -8665,6 +8690,9 @@ static luaL_Reg key_file_state_funcs[] = {
     {"load_from_file", key_file_load_from_file},
     {"load_from_data", key_file_load_from_data},
     {"to_data", key_file_to_data},
+#if GLIB_CHECK_VERSION(2, 40, 0)
+    {"save_to_file", key_file_save_to_file},
+#endif
     {"get_start_group", key_file_get_start_group},
     {"get_groups", key_file_get_groups},
     {"get_keys", key_file_get_keys},
