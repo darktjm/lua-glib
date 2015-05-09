@@ -97,6 +97,10 @@ other architectures):
 
     gcc -O2 -fPIC `pkg-config glib-2.0 --cflags --libs` -llua -shared -o glib.so
 
+Or you could use Lake:
+
+    lake NEEDS=gtk -lua lua-glib.c
+
 This documentation was built as follows (again, this is in the
 Odinfile):
 
