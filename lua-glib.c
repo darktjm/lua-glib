@@ -28,7 +28,8 @@ compile as far back as version 2.26 with a few minor missing features
 reason 2.26 was chosen is that it is the oldest version permitted
 with the GLIB_VERSION_MIN_REQUIRED macro, even though I could've gone
 as low as 2.18 without significant loss of functionality.  I have
-also in the mean time added a few bits from versions up to 2.42.2.
+also in the mean time added a few bits from versions up to 2.42.2, and
+updated compilability to 2.68.3.
 
 The sections which are mostly supported are Version Information,
 Character Set Conversion (including streaming), Unicode Manipulation
@@ -95,7 +96,7 @@ to make a shared object out of it, linked to the glib and lua
 libraries.  For example, on amd64 Linux (may need to change -fPIC on
 other architectures):
 
-    gcc -O2 -fPIC `pkg-config glib-2.0 --cflags --libs` -llua -shared -o glib.so
+    gcc -O2 -fPIC `pkg-config glib-2.0 --cflags --libs` -llua -shared -o glib.so lua-glib.c
 
 Or you could use Lake:
 
@@ -152,7 +153,7 @@ Questions/comments to darktjm@gmail.com.
 @module glib
 @author Thomas J. Moore
 @copyright 2012
-@license Apache-2.0
+@license Public Domain
 */
 /* $Id$ */
 
@@ -224,6 +225,11 @@ static int win_umask(int m)
 #define lua_getuservalue(L, n) lua_getfenv(L, n)
 #else
 #define lua_lessthan(L, a, b) lua_compare(L, a, b, LUA_OPLT)
+#endif
+
+/* 5.3, 5.4 compatibility */
+#if LUA_VERSION_NUM >= 503
+#define LUA_NUMBER_SCAN LUA_NUMBER_FMT
 #endif
 
 /* Some of this was taken from cmorris' lua-glib */
@@ -9085,9 +9091,18 @@ Get time URI was added.
 static int bookmark_file_added(lua_State *L)
 {
     GError *err = NULL;
-    time_t t;
+    time_t t = 0;
     get_udata(L, 1, st, bookmark_file_state);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt;
+    gdt = g_bookmark_file_get_added_date_time(st->bmf, luaL_checkstring(L, 2), &err);
+    if(gdt) {
+	t = g_date_time_to_unix(gdt);
+	g_date_time_unref(gdt);
+    }
+#else
     t = g_bookmark_file_get_added(st->bmf, luaL_checkstring(L, 2), &err);
+#endif
     if(err) {
 	lua_pushnil(L);
 	lua_pushstring(L, err->message);
@@ -9108,9 +9123,18 @@ Get time URI was last modified.
 static int bookmark_file_modified(lua_State *L)
 {
     GError *err = NULL;
-    time_t t;
+    time_t t = 0;
     get_udata(L, 1, st, bookmark_file_state);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt;
+    gdt = g_bookmark_file_get_modified_date_time(st->bmf, luaL_checkstring(L, 2), &err);
+    if(gdt) {
+	t = g_date_time_to_unix(gdt);
+	g_date_time_unref(gdt);
+    }
+#else
     t = g_bookmark_file_get_modified(st->bmf, luaL_checkstring(L, 2), &err);
+#endif
     if(err) {
 	lua_pushnil(L);
 	lua_pushstring(L, err->message);
@@ -9131,9 +9155,18 @@ Get time URI was last visited.
 static int bookmark_file_visited(lua_State *L)
 {
     GError *err = NULL;
-    time_t t;
+    time_t t = 0;
     get_udata(L, 1, st, bookmark_file_state);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt;
+    gdt = g_bookmark_file_get_visited_date_time(st->bmf, luaL_checkstring(L, 2), &err);
+    if(gdt) {
+	t = g_date_time_to_unix(gdt);
+	g_date_time_unref(gdt);
+    }
+#else
     t = g_bookmark_file_get_visited(st->bmf, luaL_checkstring(L, 2), &err);
+#endif
     if(err) {
 	lua_pushnil(L);
 	lua_pushstring(L, err->message);
@@ -9218,13 +9251,24 @@ Obtain registration information for application which registered URI.
 static int bookmark_file_app_info(lua_State *L)
 {
     GError *err = NULL;
-    time_t t;
+    time_t t = 0;
     guint count;
     gchar *exec;
     get_udata(L, 1, st, bookmark_file_state);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt;
+    g_bookmark_file_get_application_info(st->bmf, luaL_checkstring(L, 2),
+					 luaL_checkstring(L, 3), &exec, &count,
+					 &gdt, &err);
+    if(gdt) {
+	t = g_date_time_to_unix(gdt);
+	g_date_time_unref(gdt);
+    }
+#else
     g_bookmark_file_get_app_info(st->bmf, luaL_checkstring(L, 2),
 				 luaL_checkstring(L, 3), &exec, &count,
 				 &t, &err);
+#endif
     if(err) {
 	lua_pushnil(L);
 	lua_pushstring(L, err->message);
@@ -9320,8 +9364,15 @@ Set time URI was added.
 static int bookmark_file_set_added(lua_State *L)
 {
     get_udata(L, 1, st, bookmark_file_state);
-    g_bookmark_file_set_added(st->bmf, luaL_checkstring(L, 2),
-			      luaL_checknumber(L, 3));
+    time_t t = luaL_checknumber(L, 3);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt = t < 0 ? g_date_time_new_now_utc() :
+			     g_date_time_new_from_unix_utc(t);
+    g_bookmark_file_set_added_date_time(st->bmf, luaL_checkstring(L, 2), gdt);
+    g_date_time_unref(gdt);
+#else
+    g_bookmark_file_set_added(st->bmf, luaL_checkstring(L, 2), t);
+#endif
     return 0;
 }
 
@@ -9334,8 +9385,15 @@ Set time URI was modified.
 static int bookmark_file_set_modified(lua_State *L)
 {
     get_udata(L, 1, st, bookmark_file_state);
-    g_bookmark_file_set_modified(st->bmf, luaL_checkstring(L, 2),
-			      luaL_checknumber(L, 3));
+    time_t t = luaL_checknumber(L, 3);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt = t < 0 ? g_date_time_new_now_utc() :
+			     g_date_time_new_from_unix_utc(t);
+    g_bookmark_file_set_modified_date_time(st->bmf, luaL_checkstring(L, 2), gdt);
+    g_date_time_unref(gdt);
+#else
+    g_bookmark_file_set_modified(st->bmf, luaL_checkstring(L, 2), t);
+#endif
     return 0;
 }
 
@@ -9348,8 +9406,15 @@ Set time URI was visited.
 static int bookmark_file_set_visited(lua_State *L)
 {
     get_udata(L, 1, st, bookmark_file_state);
-    g_bookmark_file_set_visited(st->bmf, luaL_checkstring(L, 2),
-			      luaL_checknumber(L, 3));
+    time_t t = luaL_checknumber(L, 3);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt = t < 0 ? g_date_time_new_now_utc() :
+			     g_date_time_new_from_unix_utc(t);
+    g_bookmark_file_set_visited_date_time(st->bmf, luaL_checkstring(L, 2), gdt);
+    g_date_time_unref(gdt);
+#else
+    g_bookmark_file_set_visited(st->bmf, luaL_checkstring(L, 2), t);
+#endif
     return 0;
 }
 
@@ -9398,9 +9463,20 @@ static int bookmark_file_set_app_info(lua_State *L)
     gint rcount = lua_isnoneornil(L, 5) ? -1 : luaL_checknumber(L, 5);
     time_t stamp = lua_isnoneornil(L, 6) ? -1 : luaL_checknumber(L, 6);
     get_udata(L, 1, st, bookmark_file_state);
+#if GLIB_CHECK_VERSION(2, 66, 0)
+    GDateTime *gdt = stamp < 0 ? g_date_time_new_now_utc() :
+				 g_date_time_new_from_unix_utc(stamp);
+    g_bookmark_file_set_application_info(st->bmf, luaL_checkstring(L, 2),
+					 luaL_checkstring(L, 3),
+					 luaL_checkstring(L, 4), rcount, gdt,
+					 &err);
+    g_date_time_unref(gdt);
+#else
     g_bookmark_file_set_app_info(st->bmf, luaL_checkstring(L, 2),
 				 luaL_checkstring(L, 3),
-				 luaL_checkstring(L, 4), rcount, stamp, &err);
+				 luaL_checkstring(L, 4), rcount, stamp,
+				 &err);
+#endif
     lua_pushboolean(L, !err);
     if(err) {
 	lua_pushstring(L, err->message);
