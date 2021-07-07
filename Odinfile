@@ -47,76 +47,80 @@ io.write(lastl .. '\n')
 README.html == (README.rst) +cmd='rst2html.py' :stdout
 README.rst == (lua-glib.html) +cmdfile=(%mk-rst) :lua_stdout
 %mk-rst == <<
+-- --columns 500 provides consistent tables; --wrap=none does not
 -- io.input() must be specified because pipe.lua just reassigns that
 -- but does not actually reasign the program's stdin, or even io.stdin
-local f = glib.spawn{cmd="pandoc -f html -t rst", stdin=io.input()}
-local l, lastl -- lastl is for lookahead
+-- local f = glib.spawn{cmd="pandoc -f html -t rst --columns 500", stdin=io.input()}
+-- on the other hand, this is an opportunity to filter the HTML more
+local f = glib.spawn{cmd="pandoc -f html -t rst --columns 500", stdin=true}
+local lastl -- lastl is for lookahead
+for l in io.lines() do
+  -- I used to strip these later, but may as well make self-refs pure
+  l = l:gsub('lua%-glib%.html', '')
+  -- pandoc will not use sections if divs are present
+  l = l:gsub('<(/?div[^>]*)>', '<!-- %1 -->')
+  f:write(l .. '\n');
+end
+f:close()
 -- skip TOC; the table below serves just as well
 for l in f:lines() do
   if l:find('^Module ') then
-    io.write(l .. '\n')
+    lastl = l .. '\n'
     break
   end
 end
-lastl = ''
 for l in f:lines() do
+  -- pandoc's hyperlinks don't work
+  -- strip out old section anchors
+  if l:find('^ *%.%. _[a-z].*:$') then
+    l = (f:lines())(f)
+    l = (f:lines())(f)
+  end
+  -- strip out old section links
+  local didsub, newlen
+  lastl, didsub = lastl:gsub('^(`[^<`]*) <#[^>]*>`__\n',
+			     function(s)
+			       newlen = #s + 2
+			       return s .. '`_\n'
+			     end)
+  if didsub then
+    l = l:sub(0, newlen)
+  end
+  -- strip out old detail links
+  lastl = lastl:gsub('((`[^ ]*)([^<`]*) <#[^>]*>`__)', function(a, s, s2)
+							return s .. '`_' .. s2 ..
+							       string.rep(' ', #a - #s - #s2 - 2)
+						      end)
+  -- add new section anchors
+  if l:find('^%-%-%-%-') and lastl:sub(0, 1) ~= '`' then
+    lastl = '_`' .. lastl:sub(0, -2) .. '`\n'
+    l = l .. '---'
+  end
+  -- add new detail anchors
+  if l:find('^ %*%*.*%*%*$') then
+    lastl = lastl .. '\n .. _`' .. l:sub(4, -3):gsub(' .*', '') .. '`:\n\n'
+  end
   -- remove Unicode nbsp
   l = l:gsub(' ', ' ')
   -- use ASCII '
-  l = l:gsub('’', '\'')
-  -- fix examples
-  l = l:gsub(':: example', '::')
-  -- fix summary links (- headers)
-  if l:find('^%-%-%-%-') then
-    if lastl:sub(-2) == '_\n' then
-      local n = lastl:find(' <')
-      lastl = lastl:sub(1, n - 1) .. '`_\n'
-      l = l:sub(1, n + 1)
-    else
-      l = l .. '---'
-      lastl = '_`' .. lastl:sub(1, -2) .. '`\n'
-    end
-  end
-  -- fix summary function links
-  if l:find('^| `') then
-    local ls, le = l:find(' <[^>]*>`_')
-    l = l:sub(1, ls - 1) .. string.rep(' ', le - ls - 1) .. l:sub(le + 1)
-    l = l:gsub(' ', '`_%0', 2)
-    l = l:gsub('`_', '', 1)
-  end
-  l = l:gsub('^( *)%*%*([^ ' .. string.char(160) .. ']*)(.*)%*%*$', '%1_`%2`%3')
-  -- fix seealso links
-  while true do
-    local ls, le = l:find(" <lua%-glib.html#[^>]*>`_")
-    if not ls then break end
-    l = l:sub(1, ls - 1) .. '`_' .. string.rep(' ', le - ls - 1) .. l:sub(le + 1)
-  end
+  l = l:gsub('’', '\'') -- '
+  -- unescaped *
+  l = l:gsub('‘%*', '‘\\*')
   -- fix module link
-  if l:find('====') then
+  if l:find('====') and lastl:find('^Module ') then
     l = l .. '\n.. _glib:'
   end
   -- fix getenv link
   l = l:gsub('`glib%.', 'glib%.`')
   -- fix sections following literal block
-  if l:find('_`random`')
-     or l:find('_`markup\\_escape\\_text`') then
-    l = '..\n\n' .. l
+  if lastl:find('_`random`')
+     or lastl:find('_`markup_escape_text`') then
+    lastl = '\n..\n' .. lastl
   end
   -- fix class links, broken above
   lastl = lastl:gsub('(_?)`Class ', 'Class %1`')
-  -- fix excess _
-  lastl = lastl:gsub('([_)]%s+)_', '%1 ')
   -- fix LDoc link
-  if l:find('__%*') then
-    l = l:gsub('%*$', '')
-    l = l:gsub(' `', '* `')
-  end
-  -- fix ~ headers not on left margin (change to bold)
-  if l:find('^ +~~') then
-    l = ''
-    lastl = lastl:gsub('^ +', '%0**'):sub(1,-2) .. '**'
-  end
-  -----------------
+  l = l:gsub('%*\\ `LD', '* `LD')
   io.write(lastl)
   lastl = l .. '\n'
 end
